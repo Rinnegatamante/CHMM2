@@ -34,12 +34,20 @@ end
 function ChangeTheme(theme)
 	reg = System.getRegion()
 	if reg == 1 then
-		archive = 0x000002cd;
+		archive = 0x000002cd
+		archive2 = 0x0000008f
 	elseif reg == 2 then
-		archive = 0x000002ce;
+		archive = 0x000002ce
+		archive2 = 0x00000098
+
 	else
-		archive = 0x000002cc;
+		archive = 0x000002cc
+		archive2 = 0x00000082
 	end
+	savedata = io.open("/SaveData.dat",FWRITE,archive2)
+	io.write(savedata,0x141B,string.char(0),1)
+	io.write(savedata,0x13B8,string.char(0xFF,0,0,0,0,3,0,0),8)
+	io.close(savedata)
 	if System.doesFileExist(theme.."/body_LZ.bin") then
 		body = io.open(theme.."/body_LZ.bin",FREAD)
 		body_size = io.size(body)
