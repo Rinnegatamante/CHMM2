@@ -9,7 +9,18 @@ else
 end
 p = 1
 master_index = 0
-themes_table = System.listDirectory(System.currentDirectory())
+function SortDirectory(dir)
+	folders_table = {}
+	for i,file in pairs(dir) do
+		if file.directory then
+			table.insert(folders_table,file)
+		end
+	end
+	table.sort(folders_table, function (a, b) return (a.name:lower() < b.name:lower() ) end)
+	return_table = folders_table
+	return return_table
+end
+themes_table = SortDirectory(System.listDirectory(System.currentDirectory()))
 MAX_RAM_ALLOCATION = 10485760
 function u32toString(value)
 	byte4 = 0x00
@@ -97,13 +108,16 @@ function CropPrint(x, y, text, color, screen)
 end
 oldpad = Controls.read()
 no_preview = Screen.createImage(400,240)
-Screen.fillRect(0,399,0,239,white,no_preview)
 preview_table = {}
+max_previews = 16
+b_previews = 1
 for i,data in pairs(themes_table) do
-	if System.doesFileExist(System.currentDirectory()..data.name.."/preview.png") then
-		table.insert(preview_table,Screen.loadImage(System.currentDirectory()..data.name.."/preview.png"))
-	else
-		table.insert(preview_table,no_preview)
+	if (i >= b_previews) and (i <= max_previews) then
+		if System.doesFileExist(System.currentDirectory()..data.name.."/preview.png") then
+			table.insert(preview_table,Screen.loadImage(System.currentDirectory()..data.name.."/preview.png"))
+		else
+			table.insert(preview_table,no_preview)
+		end
 	end
 end
 if #preview_table > 0 then
@@ -138,7 +152,26 @@ else
 		Screen.waitVblankStart()
 	end
 end
+function UpdatePreviews()
+	for i,data in pairs(preview_table) do
+		if data ~= no_preview then
+			Screen.freeImage(data)
+		end
+	end
+	preview_table = {}
+	for i,data in pairs(themes_table) do
+		if (i >= b_previews) and (i <= max_previews) then
+			if System.doesFileExist(System.currentDirectory()..data.name.."/preview.png") then
+				table.insert(preview_table,Screen.loadImage(System.currentDirectory()..data.name.."/preview.png"))
+			else
+				table.insert(preview_table,no_preview)
+			end
+		end
+	end
+end
 while true do
+	Controls.init()
+	pad = Controls.read()
 	Screen.refresh()
 	base_y = 0
 	Screen.clear(BOTTOM_SCREEN)
@@ -157,11 +190,16 @@ while true do
 			if (y < - 100) and (y_print + height < Screen.getImageHeight(current_file)) then
 				y_print = y_print + 1
 			end
+			if Controls.check(pad,KEY_R) and not Controls.check(oldpad,KEY_R) then
+				if y_print == 0 then
+					y_print = Screen.getImageHeight(current_file) - 240
+				else
+					y_print = 0
+				end
+			end
 	else
 		Screen.drawImage(0,0,current_file,TOP_SCREEN)
 	end
-	Controls.init()
-	pad = Controls.read()
 	for l, file in pairs(themes_table) do
 		if (base_y > 226) then
 			break
@@ -185,6 +223,11 @@ while true do
 		end
 	end
 	if (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) then
+		Screen.fillEmptyRect(10,200,10,26,red,BOTTOM_SCREEN)
+		Screen.fillRect(11,199,11,27,Color.new(0,0,0),BOTTOM_SCREEN)
+		Screen.debugPrint(13,13,"Installing theme...",green,BOTTOM_SCREEN)
+		Screen.flip()
+		Screen.waitVblankStart()
 		ChangeTheme(System.currentDirectory()..themes_table[p].name)
 	elseif (Controls.check(pad,KEY_DUP)) and not (Controls.check(oldpad,KEY_DUP)) then
 			p = p - 1
@@ -209,7 +252,6 @@ while true do
 		p = 1
 	end
 	if Controls.check(pad,KEY_START) then
-		System.takeScreenshot("/CHMM.bmp")
 		for i,data in pairs(preview_table) do
 			if data ~= no_preview then
 				Screen.freeImage(data)
@@ -218,8 +260,22 @@ while true do
 		Screen.freeImage(no_preview)
 		System.exit()
 	end
+	while (p > max_previews) do
+		max_previews = max_previews + 16
+		b_previews = b_previews + 16
+		UpdatePreviews()
+	end
+	while (p < b_previews) do
+		max_previews = max_previews - 16
+		b_previews = b_previews - 16
+		UpdatePreviews()
+	end
 	if update then
-		current_file = preview_table[p]
+		r_p = p
+		while (r_p > 16) do
+			r_p = r_p - 16
+		end
+		current_file = preview_table[r_p]
 		big_image = false
 		if Screen.getImageWidth(current_file) > 400 then
 			width = 400
