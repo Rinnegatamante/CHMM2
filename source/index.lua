@@ -9,6 +9,13 @@ else
 end
 p = 1
 master_index = 0
+update_screens = true
+function OneshotPrint(my_func)
+	my_func()
+	Screen.flip()
+	Screen.refresh()
+	my_func()
+end
 function SortDirectory(dir)
 	folders_table = {}
 	for i,file in pairs(dir) do
@@ -127,6 +134,7 @@ if #preview_table > 0 then
 		big_image = true
 		x_print = 0
 		y_print = 0
+		r_width = Screen.getImageWidth(current_file)
 	else
 		width = Screen.getImageWidth(current_file)
 	end
@@ -135,6 +143,7 @@ if #preview_table > 0 then
 			big_image = true
 			x_print = 0
 			y_print = 0
+			r_height = Screen.getImageHeight(current_file)
 	else
 		height = Screen.getImageHeight(current_file)
 	end
@@ -163,41 +172,32 @@ function UpdatePreviews()
 		if (i >= b_previews) and (i <= max_previews) then
 			if System.doesFileExist(System.currentDirectory()..data.name.."/preview.png") then
 				table.insert(preview_table,Screen.loadImage(System.currentDirectory()..data.name.."/preview.png"))
+			elseif System.doesFileExist(System.currentDirectory()..data.name.."/preview.jpg") then
+				table.insert(preview_table,Screen.loadImage(System.currentDirectory()..data.name.."/preview.jpg"))
+			elseif System.doesFileExist(System.currentDirectory()..data.name.."/preview.bmp") then
+				table.insert(preview_table,Screen.loadImage(System.currentDirectory()..data.name.."/preview.bmp"))
 			else
 				table.insert(preview_table,no_preview)
 			end
 		end
 	end
 end
-while true do
-	Controls.init()
-	pad = Controls.read()
-	Screen.refresh()
+function UpdateScreens()
 	base_y = 0
-	Screen.clear(BOTTOM_SCREEN)
 	if big_image then
+		if r_width == 400 and r_height == 480 then
+			Screen.drawPartialImage(0,0,0,0,400,240,current_file,TOP_SCREEN)
+			Screen.drawPartialImage(0,0,40,240,320,240,current_file,BOTTOM_SCREEN)
+		elseif r_width == 432 and r_height == 528 then
+			Screen.drawPartialImage(0,0,16,16,400,240,current_file,TOP_SCREEN)
+			Screen.drawPartialImage(0,0,56,272,320,240,current_file,BOTTOM_SCREEN)
+		else
+			custom_big = true
+			Screen.clear(BOTTOM_SCREEN)
 			Screen.drawPartialImage(0,0,x_print,y_print,width,height,current_file,TOP_SCREEN)
-			x,y = Controls.readCirclePad()
-			if (x < - 100) and (x_print > 0) then
-				x_print = x_print - 1
-			end
-			if (y > 100) and (y_print > 0) then
-				y_print = y_print - 1
-			end
-			if (x > 100) and (x_print + width < Screen.getImageWidth(current_file)) then
-				x_print = x_print + 1
-			end
-			if (y < - 100) and (y_print + height < Screen.getImageHeight(current_file)) then
-				y_print = y_print + 1
-			end
-			if Controls.check(pad,KEY_R) and not Controls.check(oldpad,KEY_R) then
-				if y_print == 0 then
-					y_print = Screen.getImageHeight(current_file) - 240
-				else
-					y_print = 0
-				end
-			end
+		end
 	else
+		Screen.clear(BOTTOM_SCREEN)
 		Screen.drawImage(0,0,current_file,TOP_SCREEN)
 	end
 	for l, file in pairs(themes_table) do
@@ -222,25 +222,56 @@ while true do
 			base_y = base_y + 15
 		end
 	end
+end
+while true do
+	Controls.init()
+	pad = Controls.read()
+	Screen.refresh()
+	if update_screens then
+		OneshotPrint(UpdateScreens)
+		update_screens = false
+	end
+	if big_image and custom_big then
+		x,y = Controls.readCirclePad()
+		if (x < - 100) and (x_print > 0) then
+			x_print = x_print - 1
+			update_screens = true
+		end
+		if (y > 100) and (y_print > 0) then
+			y_print = y_print - 1
+			update_screens = true
+		end
+		if (x > 100) and (x_print + width < Screen.getImageWidth(current_file)) then
+			x_print = x_print + 1
+			update_screens = true
+		end
+		if (y < - 100) and (y_print + height < Screen.getImageHeight(current_file)) then
+			y_print = y_print + 1
+			update_screens = true
+		end
+	end
 	if (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) then
 		Screen.fillEmptyRect(10,200,10,26,red,BOTTOM_SCREEN)
-		Screen.fillRect(11,199,11,27,Color.new(0,0,0),BOTTOM_SCREEN)
+		Screen.fillRect(11,199,11,25,Color.new(0,0,0),BOTTOM_SCREEN)
 		Screen.debugPrint(13,13,"Installing theme...",green,BOTTOM_SCREEN)
 		Screen.flip()
 		Screen.waitVblankStart()
 		ChangeTheme(System.currentDirectory()..themes_table[p].name)
+		update_screens = true
 	elseif (Controls.check(pad,KEY_DUP)) and not (Controls.check(oldpad,KEY_DUP)) then
 			p = p - 1
 			update = true
 		if (p >= 16) then
 			master_index = p - 15
 		end
+		update_screens = true
 	elseif (Controls.check(pad,KEY_DDOWN)) and not (Controls.check(oldpad,KEY_DDOWN)) then
 		p = p + 1
 		update = true
 		if (p >= 17) then
 			master_index = p - 15
 		end
+		update_screens = true
 	end
 	if (p < 1) then
 		p = #themes_table
@@ -277,11 +308,13 @@ while true do
 		end
 		current_file = preview_table[r_p]
 		big_image = false
+		custom_big = false
 		if Screen.getImageWidth(current_file) > 400 then
 			width = 400
 			big_image = true
 			x_print = 0
 			y_print = 0
+			r_width = Screen.getImageWidth(current_file)
 		else
 			width = Screen.getImageWidth(current_file)
 		end
@@ -290,6 +323,7 @@ while true do
 			big_image = true
 			x_print = 0
 			y_print = 0
+			r_height = Screen.getImageHeight(current_file)
 		else
 			height = Screen.getImageHeight(current_file)
 		end
