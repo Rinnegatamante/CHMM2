@@ -175,6 +175,8 @@ static int lua_partial(lua_State *L){
 	if (argc == 5) side = luaL_checkint(L,9);
 	if (screen > 1) PrintPartialImageBitmap(x,y,st_x,st_y,width,height,file,screen);
 	else PrintPartialScreenBitmap(x,y,st_x,st_y,width,height,file,screen,side);
+	gfxFlushBuffers();
+	return 0;
 }
 
 static int lua_flipBitmap(lua_State *L)
