@@ -41,12 +41,13 @@
 #define stringify(str) #str
 #define VariableRegister(lua, value) do { lua_pushinteger(lua, value); lua_setglobal (lua, stringify(value)); } while(0)
 
+extern NS_APPID currentAppId;
 int FREAD = 0;
 int FWRITE = 1;
 int FCREATE = 2;
 int NAND = 0;
 int SDMC = 1;
-
+extern bool is3DSX;
 FS_archive main_extdata_archive;
 
 void unicodeToChar(char* dst, u16* src)
@@ -60,6 +61,14 @@ static int lua_exit(lua_State *L)
 {
     int argc = lua_gettop(L);
     if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	if (!is3DSX){
+		aptOpenSession();
+		APT_ReplySleepQuery(NULL, currentAppId, 0x0);
+		aptCloseSession();
+		aptSetStatusPower(1);
+		aptSetStatus(APP_SUSPENDING);
+		aptReturnToMenu();
+	}
 	char string[20];
 	strcpy(string,"lpp_exit_0456432");
 	return luaL_error(L, string); // NOTE: This is a fake error

@@ -37,7 +37,10 @@
 #include "include/luaplayer.h"
 #include "include/luaGraphics.h"
 #include "index.cpp"
+#include "include/khax/khax.h"
 
+bool is3DSX;
+extern NS_APPID currentAppId;
 const char *errMsg;
 unsigned char *buffer;
 char cur_dir[256];
@@ -59,32 +62,28 @@ int main(int argc, char **argv)
 	u32 bytesRead;
 	int restore;
 	
-	// Set main script
-	char path[256];
-	if (argc > 0){	
-		int latest_slash = 0;
-		int i=5;
-		while (argv[0][i]  != '\0'){
-		if (argv[0][i] == '/'){
-		latest_slash = i;
-		}
-		i++;
-		}
-		strcpy(path,&argv[0][5]);
-		path[latest_slash-5] = 0;
-		strcpy(start_dir,path);
-		strcpy(cur_dir,path); // Set current dir
-		strcat(path,"/index.lua");
-	}else{
-		strcpy(start_dir,"/");
-		strcpy(cur_dir,"/"); // Set current dir for GW Mode
-		strcpy(path,"/index.lua");
-	}
+	if (argc > 0){
+		is3DSX = true;
+		khaxInit();
+	}else is3DSX = false;
 		
 	while(aptMainLoop())
 	{
 		restore=0;		
 		char error[256];
+		char startstring[256];
+		if (!is3DSX){
+			while (aptGetStatus() != 0x04 or aptGetStatusPower() != 0x01){
+				sprintf(startstring,"CHMM Controls:\n\nA = Install Theme\nY = Listen BGM Theme (If available)\nSTART = Exit CHMM\n\nPress POWER to initialize CHMM.");
+				RefreshScreen();
+				ClearScreen(0);
+				ClearScreen(1);
+				DebugOutput(startstring);
+				gfxFlushBuffers();
+				gfxSwapBuffers();
+				gspWaitForVBlank();
+			}
+		}
 		
 		errMsg = runScript((char*)index_lua, true);
 		
@@ -120,7 +119,7 @@ int main(int argc, char **argv)
 							break;
 						}
 	}
-	
+	if (is3DSX) khaxExit;
 	fsExit();
 	irrstExit();
 	hidExit();

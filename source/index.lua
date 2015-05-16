@@ -2,6 +2,7 @@ white = Color.new(255,255,255)
 red = Color.new(255,0,0)
 green = Color.new(0,255,0)
 update = false
+music = false
 if System.currentDirectory() == "/" then
 	System.currentDirectory("/Themes/")
 else
@@ -10,6 +11,13 @@ end
 p = 1
 master_index = 0
 update_screens = true
+function CloseMusic()
+	if music then
+		Sound.pause(bgm)
+		Sound.close(bgm)
+		music = false
+	end
+end
 function OneshotPrint(my_func)
 	my_func()
 	Screen.flip()
@@ -223,6 +231,7 @@ function UpdateScreens()
 		end
 	end
 end
+Sound.init()
 while true do
 	Controls.init()
 	pad = Controls.read()
@@ -251,6 +260,7 @@ while true do
 		end
 	end
 	if (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) then
+		CloseMusic()
 		Screen.fillEmptyRect(10,200,10,26,red,BOTTOM_SCREEN)
 		Screen.fillRect(11,199,11,25,Color.new(0,0,0),BOTTOM_SCREEN)
 		Screen.debugPrint(13,13,"Installing theme...",green,BOTTOM_SCREEN)
@@ -258,14 +268,28 @@ while true do
 		Screen.waitVblankStart()
 		ChangeTheme(System.currentDirectory()..themes_table[p].name)
 		update_screens = true
+	elseif (Controls.check(pad,KEY_Y)) and not (Controls.check(oldpad,KEY_Y)) then
+		if System.doesFileExist(System.currentDirectory()..themes_table[p].name.."/BGM.ogg") and not music then
+			Screen.fillEmptyRect(10,200,10,26,red,BOTTOM_SCREEN)
+			Screen.fillRect(11,199,11,25,Color.new(0,0,0),BOTTOM_SCREEN)
+			Screen.debugPrint(13,13,"Opening BGM...",green,BOTTOM_SCREEN)
+			Screen.flip()
+			Screen.waitVblankStart()
+			update_screens = true
+			bgm = Sound.openOgg(System.currentDirectory()..themes_table[p].name.."/BGM.ogg",false)
+			Sound.play(bgm,LOOP,0x08,0x09)
+			music = true
+		end
 	elseif (Controls.check(pad,KEY_DUP)) and not (Controls.check(oldpad,KEY_DUP)) then
-			p = p - 1
-			update = true
+		CloseMusic()
+		p = p - 1
+		update = true
 		if (p >= 16) then
 			master_index = p - 15
 		end
 		update_screens = true
 	elseif (Controls.check(pad,KEY_DDOWN)) and not (Controls.check(oldpad,KEY_DDOWN)) then
+		CloseMusic()
 		p = p + 1
 		update = true
 		if (p >= 17) then
@@ -289,6 +313,8 @@ while true do
 			end
 		end
 		Screen.freeImage(no_preview)
+		CloseMusic()
+		Sound.term()
 		System.exit()
 	end
 	while (p > max_previews) do
