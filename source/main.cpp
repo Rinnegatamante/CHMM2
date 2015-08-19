@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 		char startstring[256];
 		if (!is3DSX){
 			while (aptGetStatus() != 0x04 or aptGetStatusPower() != 0x01){
-				sprintf(startstring,"CHMM Controls:\n\nA = Install Theme\nY = Listen BGM Theme (If available)\nSTART = Exit CHMM\n\nPress POWER to initialize CHMM.");
+				sprintf(startstring,"CHMM Controls:\n\nA = Install Theme\nY = Theme Preview\nSTART = Exit CHMM\n\nPress POWER to initialize CHMM.");
 				RefreshScreen();
 				ClearScreen(0);
 				ClearScreen(1);
