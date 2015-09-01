@@ -24,10 +24,10 @@
 #-----------------------------------------------------------------------------------------------------------------------#
 #- Credits : -----------------------------------------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------------------------------------------------#
-#- Smealum for ctrulib -------------------------------------------------------------------------------------------------#
+#- Smealum for ctrulib and ftpony src ----------------------------------------------------------------------------------#
 #- StapleButter for debug font -----------------------------------------------------------------------------------------#
 #- Lode Vandevenne for lodepng -----------------------------------------------------------------------------------------#
-#- Sean Barrett for stb_truetype ---------------------------------------------------------------------------------------#
+#- Jean-loup Gailly and Mark Adler for zlib ----------------------------------------------------------------------------#
 #- Special thanks to Aurelio for testing, bug-fixing and various help with codes and implementations -------------------#
 #-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -52,10 +52,15 @@ void luaSystem_init(lua_State *L);
 void luaTimer_init(lua_State *L);
 void luaSound_init(lua_State *L);
 void luaVideo_init(lua_State *L);
-
+void luaGraphics_init(lua_State *L);
+void luaNetwork_init(lua_State *L);
+Result amInit();
+Result amExit();
 void stackDump (lua_State *L);
 
 extern bool GW_MODE;
+extern bool CIA_MODE;
+extern bool isCSND;
 extern char cur_dir[256];
 
 #endif

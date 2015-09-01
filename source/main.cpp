@@ -24,10 +24,10 @@
 #-----------------------------------------------------------------------------------------------------------------------#
 #- Credits : -----------------------------------------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------------------------------------------------#
-#- Smealum for ctrulib -------------------------------------------------------------------------------------------------#
+#- Smealum for ctrulib and ftpony src ----------------------------------------------------------------------------------#
 #- StapleButter for debug font -----------------------------------------------------------------------------------------#
 #- Lode Vandevenne for lodepng -----------------------------------------------------------------------------------------#
-#- Sean Barrett for stb_truetype ---------------------------------------------------------------------------------------#
+#- Jean-loup Gailly and Mark Adler for zlib ----------------------------------------------------------------------------#
 #- Special thanks to Aurelio for testing, bug-fixing and various help with codes and implementations -------------------#
 #-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -35,16 +35,18 @@
 #include <string.h>
 #include <3ds.h>
 #include "include/luaplayer.h"
-#include "include/luaGraphics.h"
+#include "include/Graphics/Graphics.h"
+#include "include/ftp/ftp.h"
 #include "index.cpp"
 #include "include/khax/khax.h"
 
-bool is3DSX;
-extern NS_APPID currentAppId;
 const char *errMsg;
 unsigned char *buffer;
 char cur_dir[256];
 char start_dir[256];
+bool CIA_MODE;
+bool is3DSX;
+
 int main(int argc, char **argv)
 {
 	srvInit();	
@@ -52,9 +54,13 @@ int main(int argc, char **argv)
 	gfxInitDefault();
 	acInit();
 	initCfgu();
+	httpcInit();
 	ptmInit();
 	hidInit(NULL);
 	irrstInit(NULL);
+	aptOpenSession();
+	Result ret=APT_SetAppCpuTimeLimit(NULL, 30);
+	aptCloseSession();
 	fsInit();
 	hbInit();
 	Handle fileHandle;
@@ -66,7 +72,7 @@ int main(int argc, char **argv)
 		is3DSX = true;
 		khaxInit();
 	}else is3DSX = false;
-		
+	
 	while(aptMainLoop())
 	{
 		restore=0;		

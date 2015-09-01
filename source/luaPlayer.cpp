@@ -24,10 +24,10 @@
 #-----------------------------------------------------------------------------------------------------------------------#
 #- Credits : -----------------------------------------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------------------------------------------------#
-#- Smealum for ctrulib -------------------------------------------------------------------------------------------------#
+#- Smealum for ctrulib and ftpony src ----------------------------------------------------------------------------------#
 #- StapleButter for debug font -----------------------------------------------------------------------------------------#
 #- Lode Vandevenne for lodepng -----------------------------------------------------------------------------------------#
-#- Sean Barrett for stb_truetype ---------------------------------------------------------------------------------------#
+#- Jean-loup Gailly and Mark Adler for zlib ----------------------------------------------------------------------------#
 #- Special thanks to Aurelio for testing, bug-fixing and various help with codes and implementations -------------------#
 #-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -40,9 +40,10 @@
 #include <string.h>
 #include <3ds.h>
 #include "include/luaplayer.h"
+#include "include/khax/khax.h"
 
 static lua_State *L;
-bool GW_MODE;
+bool isCSND;
 
 const char *runScript(const char* script, bool isStringBuffer)
 {
@@ -50,19 +51,14 @@ const char *runScript(const char* script, bool isStringBuffer)
 	
 	// Standard libraries
 	luaL_openlibs(L);
-	
-	// Check if user is in GW mode
-	if (CSND_initialize(NULL)==0){
-	CSND_shutdown();
-	GW_MODE = false;
-	}else{
-	GW_MODE = true;
-	}
+	isCSND = false;
 	
 	// Modules
 	luaSystem_init(L);
 	luaScreen_init(L);
+	luaGraphics_init(L);
 	luaControls_init(L);
+	luaNetwork_init(L);
 	luaTimer_init(L);
 	luaSound_init(L);
 	luaVideo_init(L);
@@ -78,7 +74,7 @@ const char *runScript(const char* script, bool isStringBuffer)
 			 io.read = System.readFile\n\
 			 io.size = System.getFileSize";
 	luaL_loadbuffer(L, patch, strlen(patch), NULL); 
-	lua_CFunction dofilecont = (lua_CFunction)(lua_gettop(L) - 1);
+	lua_KFunction dofilecont = (lua_KFunction)(lua_gettop(L) - 1);
 	lua_callk(L, 0, LUA_MULTRET, 0, dofilecont);
 	
 	if(!isStringBuffer) 

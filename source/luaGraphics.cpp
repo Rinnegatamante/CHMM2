@@ -24,786 +24,349 @@
 #-----------------------------------------------------------------------------------------------------------------------#
 #- Credits : -----------------------------------------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------------------------------------------------#
-#- Smealum for ctrulib -------------------------------------------------------------------------------------------------#
+#- Smealum for ctrulib and ftpony src ----------------------------------------------------------------------------------#
 #- StapleButter for debug font -----------------------------------------------------------------------------------------#
 #- Lode Vandevenne for lodepng -----------------------------------------------------------------------------------------#
-#- Sean Barrett for stb_truetype ---------------------------------------------------------------------------------------#
+#- Jean-loup Gailly and Mark Adler for zlib ----------------------------------------------------------------------------#
+#- xerpi for sf2dlib ---------------------------------------------------------------------------------------------------#
 #- Special thanks to Aurelio for testing, bug-fixing and various help with codes and implementations -------------------#
 #-----------------------------------------------------------------------------------------------------------------------*/
-
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <3ds.h>
-#include "include/luaGraphics.h"
-#include "include/font.h"
-#define LODEPNG_COMPILE_PNG
-#include "include/lodepng/lodepng.h"
+#include "include/luaplayer.h"
+#include "include/Graphics/Graphics.h"
+extern "C"{
+	#include "include/sf2d/sf2d.h"
+}
 
-#define CONFIG_3D_SLIDERSTATE (*(float*)0x1FF81080)
+struct gpu_text{
+	u32 magic;
+	u16 width;
+	u16 height;
+	sf2d_texture* tex;
+};
 
-typedef unsigned short u16;
-u8* TopLFB;
-u8* TopRFB;
-u8* BottomFB;
+int cur_screen;
 
-Bitmap* LoadBitmap(char* fname){
+static int lua_init(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");	
+    sf2d_init();
+	cur_screen = 2;
+	sf2d_set_clear_color(RGBA8(0x00, 0x00, 0x00, 0xFF));
+    return 0;
+}
+
+static int lua_term(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	cur_screen = 2;
+    sf2d_fini();
+    return 0;
+}
+
+static int lua_refresh(lua_State *L) {
+    int argc = lua_gettop(L);
+	if ((argc != 1) && (argc != 2))  return luaL_error(L, "wrong number of arguments");
+	int screen = luaL_checkinteger(L,1);
+	int side=0;
+	if (argc == 2) side = luaL_checkinteger(L,2);
+	gfxScreen_t my_screen;
+	gfx3dSide_t eye;
+	cur_screen = screen;
+	if (screen == 0) my_screen = GFX_TOP;
+	else my_screen = GFX_BOTTOM;
+	if (side == 0) eye = GFX_LEFT;
+	else eye = GFX_RIGHT;
+    sf2d_start_frame(my_screen,eye);
+    return 0;
+}
+
+static int lua_end(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+    sf2d_end_frame();
+    return 0;
+}
+
+static int lua_flip(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+    sf2d_swapbuffers();
+    return 0;
+}
+
+static int lua_rect(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 5 && argc != 6) return luaL_error(L, "wrong number of arguments");
+	int x1 = luaL_checkinteger(L,1);
+	int x2 = luaL_checkinteger(L,2);
+	int y1 = luaL_checkinteger(L,3);
+	int y2 = luaL_checkinteger(L,4);
+	float radius = 0;
+	if (x2 < x1){
+		int tmp = x2;
+		x2 = x1;
+		x1 = tmp;
+	}
+	if (y2 < y1){
+		int tmp = y2;
+		y2 = y1;
+		y1 = tmp;
+	}
+	u32 color = luaL_checkinteger(L,5);
+	if (argc == 6) radius = luaL_checknumber(L,6);
+	if (radius == 0){
+		#ifndef SKIP_ERROR_HANDLING
+			if ((x1 < 0) || (y1 < 0) || (x2 < 0) || (y2 < 0)) return luaL_error(L, "out of bounds");
+			if ((cur_screen == 0) && ((x1 > 400) || (x2 > 400))) return luaL_error(L, "out of framebuffer bounds");
+			if ((cur_screen == 1) && ((x1 > 320) || (x2 > 320))) return luaL_error(L, "out of framebuffer bounds");
+			if (y1 > 240 || y2 > 240) return luaL_error(L, "out of framebuffer bounds");
+			if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+		#endif
+		sf2d_draw_rectangle(x1, y1, x2-x1, y2-y1, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+    }else{
+		#ifndef SKIP_ERROR_HANDLING
+			if ((x1 < 0) || (y1 < 0)) return luaL_error(L, "out of bounds");
+			if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+		#endif
+		sf2d_draw_rectangle_rotate(x1, y1, x2-x1, y2-y1, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF), radius);
+	}
+	return 0;
+}
+
+static int lua_fillcircle(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 5 && argc != 6) return luaL_error(L, "wrong number of arguments");
+	int x = luaL_checkinteger(L,1);
+	int y = luaL_checkinteger(L,2);
+	int radius = luaL_checkinteger(L,3);
+	u32 color = luaL_checkinteger(L,4);
+	#ifndef SKIP_ERROR_HANDLING
+		if ((x < 0) || (y < 0)) return luaL_error(L, "out of bounds");
+		if ((cur_screen == 0) && (x > 400)) return luaL_error(L, "out of framebuffer bounds");
+		if ((cur_screen == 1) && (x > 320)) return luaL_error(L, "out of framebuffer bounds");
+		if (y > 240) return luaL_error(L, "out of framebuffer bounds");
+		if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+	#endif
+	sf2d_draw_fill_circle(x, y, radius, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+	return 0;
+}
+
+
+static int lua_line(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 5) return luaL_error(L, "wrong number of arguments");
+	int x1 = luaL_checkinteger(L,1);
+	int x2 = luaL_checkinteger(L,2);
+	int y1 = luaL_checkinteger(L,3);
+	int y2 = luaL_checkinteger(L,4);
+	#ifndef SKIP_ERROR_HANDLING
+		if ((x1 < 0) || (y1 < 0) || (x2 < 0) || (y2 < 0)) return luaL_error(L, "out of bounds");
+		if ((cur_screen == 0) && ((x1 > 400) || (x2 > 400))) return luaL_error(L, "out of framebuffer bounds");
+		if ((cur_screen == 1) && ((x1 > 320) || (x2 > 320))) return luaL_error(L, "out of framebuffer bounds");
+		if (y1 > 240 || y2 > 240) return luaL_error(L, "out of framebuffer bounds");
+		if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+	#endif
+	u32 color = luaL_checkinteger(L,5);
+    sf2d_draw_line(x1, y1, x2, y2, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+    return 0;
+}
+
+static int lua_emptyrect(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 5) return luaL_error(L, "wrong number of arguments");
+	int x1 = luaL_checkinteger(L,1);
+	int x2 = luaL_checkinteger(L,2);
+	int y1 = luaL_checkinteger(L,3);
+	int y2 = luaL_checkinteger(L,4);
+	#ifndef SKIP_ERROR_HANDLING
+		if ((x1 < 0) || (y1 < 0) || (x2 < 0) || (y2 < 0)) return luaL_error(L, "out of bounds");
+		if ((cur_screen == 0) && ((x1 > 400) || (x2 > 400))) return luaL_error(L, "out of framebuffer bounds");
+		if ((cur_screen == 1) && ((x1 > 320) || (x2 > 320))) return luaL_error(L, "out of framebuffer bounds");
+		if (y1 > 240 || y2 > 240) return luaL_error(L, "out of framebuffer bounds");
+		if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+	#endif
+	u32 color = luaL_checkinteger(L,5);
+    sf2d_draw_line(x1, y1, x1, y2, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+    sf2d_draw_line(x2, y1, x2, y2, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+	sf2d_draw_line(x1, y2, x2, y2, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+	sf2d_draw_line(x1, y1, x2, y1, RGBA8((color >> 16) & 0xFF, (color >> 8) & 0xFF, (color) & 0xFF, (color >> 24) & 0xFF));
+	return 0;
+}
+
+static int lua_loadimg(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	char* text = (char*)(luaL_checkstring(L, 1));
 	Handle fileHandle;
-	u64 size;
 	u32 bytesRead;
-	FS_path filePath=FS_makePath(PATH_CHAR, fname);
+	u16 magic;
+	u64 long_magic;
+	FS_path filePath=FS_makePath(PATH_CHAR, text);
 	FS_archive script=(FS_archive){ARCH_SDMC, (FS_path){PATH_EMPTY, 1, (u8*)""}};
 	FSUSER_OpenFileDirectly(NULL, &fileHandle, script, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
-	FSFILE_GetSize(fileHandle, &size);
-	Bitmap* result = (Bitmap*)malloc(sizeof(Bitmap));
-	
-	if(!result) {
+	FSFILE_Read(fileHandle, &bytesRead, 0, &magic, 2);
+	Bitmap* bitmap;
+	if (magic == 0x5089){
+		FSFILE_Read(fileHandle, &bytesRead, 0, &long_magic, 8);
 		FSFILE_Close(fileHandle);
 		svcCloseHandle(fileHandle);
-		return 0;
+		if (long_magic == 0x0A1A0A0D474E5089) bitmap = decodePNGfile(text);
+	}else if (magic == 0x4D42){
+		FSFILE_Close(fileHandle);
+		svcCloseHandle(fileHandle);
+		bitmap = decodeBMPfile(text);
+	}else if (magic == 0xD8FF){
+		FSFILE_Close(fileHandle);
+		svcCloseHandle(fileHandle);
+		bitmap = decodeJPGfile(text);
 	}
-	
-	result->pixels = (u8*)malloc(size-0x36);
-	FSFILE_Read(fileHandle, &bytesRead, 0x36, result->pixels, size-0x36);
-	FSFILE_Read(fileHandle, &bytesRead, 0x12, &(result->width), 4);
-	FSFILE_Read(fileHandle, &bytesRead, 0x16, &(result->height), 4);
-	FSFILE_Read(fileHandle, &bytesRead, 0x1C, &(result->bitperpixel), 2);
-	
-	FSFILE_Close(fileHandle);
-	svcCloseHandle(fileHandle);
-	
-	return result;
-}
-
-void PrintImageBitmap(int xp,int yp, Bitmap* result,int screen){
-	if(!result)
-		return;
-	int x, y;
-	for (y = 0; y < result->height; y++){
-		for (x = 0; x < result->width; x++){
-			u32 color;
-			if (result->bitperpixel == 24){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*3];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 2];
-				color = B + G*256 + R*256*256;
-				DrawImagePixel(xp+x,yp+y,color,(Bitmap*)screen);
-			}else if (result->bitperpixel == 32){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*4];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 2];
-				u8 A = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 3];
-				color = B + G*256 + R*256*256;
-				DrawAlphaImagePixel(xp+x,yp+y,color,(Bitmap*)screen, A);
-			}
-			
+	if(!bitmap) return luaL_error(L, "Error loading image");
+	if (bitmap->bitperpixel == 24){
+		int length = bitmap->width*bitmap->height;
+		u8* real_pixels = (u8*)malloc(length * 4);
+		int i = 0;
+		int z = 0;
+		while (i < length){
+			real_pixels[i] = bitmap->pixels[i-z];
+			real_pixels[i+1] = bitmap->pixels[i-z+1];
+			real_pixels[i+2] = bitmap->pixels[i-z+2];
+			real_pixels[i+3] = 0xFF;
+			i = i + 4;
+			z++;
 		}
+		free(bitmap->pixels);
+		bitmap->pixels = real_pixels;
 	}
+	sf2d_texture *tex = sf2d_create_texture(bitmap->width, bitmap->height, GPU_RGBA8, SF2D_PLACE_RAM);
+	sf2d_fill_texture_from_RGBA8(tex, (u32*)bitmap->pixels, bitmap->width, bitmap->height);
+	sf2d_texture_tile32(tex);
+	gpu_text* result = (gpu_text*)malloc(sizeof(gpu_text));
+	result->magic = 0x4C545854;
+	result->tex = tex;
+	result->width = bitmap->width;
+	result->height = bitmap->height;
+	free(bitmap->pixels);
+	free(bitmap);
+    lua_pushinteger(L, (u32)(result));
+	return 1;
 }
 
-void PrintScreenBitmap(int xp,int yp, Bitmap* result,int screen,int side){
-if(!result)
-	return;
-u8* buffer = 0;
-if (screen == 0){
-if (side == 0) buffer = TopLFB;
-else buffer = TopRFB;
-}else if (screen == 1) buffer = BottomFB;
-int x, y;
-	for (y = 0; y < result->height; y++){
-		for (x = 0; x < result->width; x++){
-			u32 color;
-			if (result->bitperpixel == 24){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*3];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 2];
-				color = B + G*256 + R*256*256;
-				DrawPixel(buffer,xp+x,yp+y,color);
-			}else if (result->bitperpixel == 32){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*4];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 2];
-				u8 A = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 3];
-				color = B + G*256 + R*256*256;
-				DrawAlphaPixel(buffer,xp+x,yp+y,color,A);
-			}			
-		}
-	}
-}
-
-void PrintPartialScreenBitmap(int xp,int yp,int st_x,int st_y,int width,int height, Bitmap* result,int screen,int side){
-if(!result)
-	return;
-u8* buffer = 0;
-if (screen == 0){
-if (side == 0) buffer = TopLFB;
-else buffer = TopRFB;
-}else if (screen == 1) buffer = BottomFB;
-int x, y;
-	for (y = st_y; y < st_y + height; y++){
-		for (x = st_x; x < st_x + width; x++){
-			u32 color;
-			if (result->bitperpixel == 24){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*3];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 2];
-				color = B + G*256 + R*256*256;
-				DrawPixel(buffer,xp+x-st_x,yp+y-st_y,color);
-			}else if (result->bitperpixel == 32){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*4];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 2];
-				u8 A = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 3];
-				color = B + G*256 + R*256*256;
-				DrawAlphaPixel(buffer,xp+x-st_x,yp+y-st_y,color,A);
-			}			
-		}
-	}
-}
-
-void PrintPartialImageBitmap(int xp,int yp,int st_x,int st_y,int width,int height, Bitmap* result,int screen){
-	if(!result)
-		return;
-	int x, y;
-	for (y = st_y; y < st_y + height; y++){
-		for (x = st_x; x < st_x + width; x++){
-			u32 color;
-			if (result->bitperpixel == 24){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*3];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 2];
-				color = B + G*256 + R*256*256;
-				DrawImagePixel(xp+x-st_x,yp+y-st_y,color,(Bitmap*)screen);
-			}else if (result->bitperpixel == 32){
-				u8 B = result->pixels[(x + (result->height - y - 1) * result->width)*4];
-				u8 G = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 1];
-				u8 R = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 2];
-				u8 A = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 3];
-				color = B + G*256 + R*256*256;
-				DrawAlphaImagePixel(xp+x-st_x,yp+y-st_y,color,(Bitmap*)screen, A);
-			}
-			
-		}
-	}
-}
-
-u8* flipBitmap(u8* flip_bitmap, Bitmap* result){
-if(!result)
-	return 0;
-int x, y;
-if (result->bitperpixel == 24){
-	for (y = 0; y < result->height; y++){
-		for (x = 0; x < result->width; x++){
-			flip_bitmap[(x + y * result->width)*3] = result->pixels[(x + (result->height - y - 1) * result->width)*3];
-			flip_bitmap[(x + y * result->width)*3 + 1] = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 1];
-			flip_bitmap[(x + y * result->width)*3 + 2] = result->pixels[(x + (result->height - y - 1) * result->width)*3 + 2];
-		}
-	}
-}else if(result->bitperpixel == 32){
-	for (y = 0; y < result->height; y++){
-		for (x = 0; x < result->width; x++){
-			flip_bitmap[(x + y * result->width)*4] = result->pixels[(x + (result->height - y - 1) * result->width)*4];
-			flip_bitmap[(x + y * result->width)*4 + 1] = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 1];
-			flip_bitmap[(x + y * result->width)*4 + 2] = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 2];
-			flip_bitmap[(x + y * result->width)*4 + 3] = result->pixels[(x + (result->height - y - 1) * result->width)*4 + 3];
-		}
-	}
-}
-	return flip_bitmap;
-}
-
-void DrawPixel(u8* screen, int x,int y, u32 color){
-	int idx = ((x)*240) + (239-(y));
-	screen[idx*3+0] = (color);
-	screen[idx*3+1] = (color) >> 8;
-	screen[idx*3+2] = (color) >> 16;
-}
-
-void DrawAlphaPixel(u8* screen, int x,int y, u32 color, u8 alpha){
-	int idx = ((x)*240) + (239-(y));
-	float ratio = alpha / 255.0f;
-	screen[idx*3+0] = ((color & 0xFF) * ratio) + (screen[idx*3+0] * (1.0 - ratio));
-	screen[idx*3+1] = ((((color) >> 8) & 0xFF) * ratio) + (screen[idx*3+1] * (1.0 - ratio));
-	screen[idx*3+2] = ((((color) >> 16) & 0xFF) * ratio) + (screen[idx*3+2] * (1.0 - ratio));
-}
-
-u32 GetPixel(int x,int y,int screen,int side){
-int idx = ((x)*240) + (239-(y));
-u32 color;
-if ((screen == 0) && (x < 400) && (y < 240) && (x >= 0) && (y >= 0)){
-if (side == 0){
-color = TopLFB[idx*3+0] + TopLFB[idx*3+1] * 256 + TopLFB[idx*3+2] * 256 * 256;
-}else{
-color = TopRFB[idx*3+0] + TopRFB[idx*3+1] * 256 + TopRFB[idx*3+2] * 256 * 256;
-}
-}else if((screen == 1) && (x < 320) && (y < 240) && (x >= 0) && (y >= 0)){
-color = BottomFB[idx*3+0] + BottomFB[idx*3+1] * 256 + BottomFB[idx*3+2] * 256 * 256;
-}
-return color;
-}
-
-u32 GetImagePixel(int x,int y,Bitmap* screen){
-int idx = (x + (screen->height - y) * screen->width);
-u32 color = screen->pixels[idx*3+0] + screen->pixels[idx*3+1] * 256 + screen->pixels[idx*3+2] * 256 * 256;
-return color;
-}
-
-void DrawAlphaImagePixel(int x,int y,u32 color,Bitmap* screen, u8 alpha){
-int idx = (x + (screen->height - y) * screen->width);
-float ratio = alpha / 255.0f;
-screen->pixels[idx*3+0] = ((color & 0xFF) * ratio) + (screen->pixels[idx*3+0] * (1.0 - ratio));
-screen->pixels[idx*3+1] = ((((color) >> 8) & 0xFF) * ratio) + (screen->pixels[idx*3+1] * (1.0 - ratio));
-screen->pixels[idx*3+2] = ((((color) >> 16) & 0xFF) * ratio) + (screen->pixels[idx*3+2] * (1.0 - ratio));
-}
-
-void DrawImagePixel(int x,int y,u32 color,Bitmap* screen){
-int idx = (x + (screen->height - y) * screen->width);
-screen->pixels[idx*3+0] = (color);
-screen->pixels[idx*3+1] = (color) >> 8;
-screen->pixels[idx*3+2] = (color) >> 16;
-}
-
-void RefreshScreen(){
-TopLFB = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
-if (CONFIG_3D_SLIDERSTATE != 0) TopRFB = gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, NULL, NULL);
-BottomFB = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
-}
-
-void DrawScreenText(int x, int y, char* str, u32 color, int screen,int side){
-u8* buffer;
-if (screen == 0){
-if (side == 0) buffer = TopLFB;
-else buffer = TopRFB;
-}else if (screen == 1) buffer = BottomFB;
-unsigned short* ptr;
-unsigned short glyphsize;
-int i, cx, cy;
-for (i = 0; str[i] != '\0'; i++)
+static int lua_drawimg(lua_State *L)
 {
-if (str[i] < 0x21)
-{
-x += 6;
-continue;
-}
-u16 ch = str[i];
-if (ch > 0x7E) ch = 0x7F;
-ptr = &font[(ch-0x20) << 4];
-glyphsize = ptr[0];
-if (!glyphsize)
-{
-x += 6;
-continue;
-}
-x++;
-for (cy = 0; cy < 12; cy++)
-{
-unsigned short val = ptr[4+cy];
-for (cx = 0; cx < glyphsize; cx++)
-{
-if (val & (1 << cx))
-DrawPixel(buffer, x+cx, y+cy, color);
-}
-}
-x += glyphsize;
-x++;
-}
-}
-
-void DrawAlphaScreenText(int x, int y, char* str, u32 color, int screen,int side,u8 alpha){
-u8* buffer;
-if (screen == 0){
-if (side == 0) buffer = TopLFB;
-else buffer = TopRFB;
-}else if (screen == 1) buffer = BottomFB;
-unsigned short* ptr;
-unsigned short glyphsize;
-int i, cx, cy;
-for (i = 0; str[i] != '\0'; i++)
-{
-if (str[i] < 0x21)
-{
-x += 6;
-continue;
-}
-u16 ch = str[i];
-if (ch > 0x7E) ch = 0x7F;
-ptr = &font[(ch-0x20) << 4];
-glyphsize = ptr[0];
-if (!glyphsize)
-{
-x += 6;
-continue;
-}
-x++;
-for (cy = 0; cy < 12; cy++)
-{
-unsigned short val = ptr[4+cy];
-for (cx = 0; cx < glyphsize; cx++)
-{
-if (val & (1 << cx))
-DrawAlphaPixel(buffer, x+cx, y+cy, color, alpha);
-}
-}
-x += glyphsize;
-x++;
-}
-}
-
-void DrawAlphaImageText(int x, int y, char* str, u32 color, int screen, u8 alpha){
-unsigned short* ptr;
-unsigned short glyphsize;
-int i, cx, cy;
-for (i = 0; str[i] != '\0'; i++)
-{
-if (str[i] < 0x21)
-{
-x += 6;
-continue;
-}
-u16 ch = str[i];
-if (ch > 0x7E) ch = 0x7F;
-ptr = &font[(ch-0x20) << 4];
-glyphsize = ptr[0];
-if (!glyphsize)
-{
-x += 6;
-continue;
-}
-x++;
-for (cy = 0; cy < 12; cy++)
-{
-unsigned short val = ptr[4+cy];
-for (cx = 0; cx < glyphsize; cx++)
-{
-if (val & (1 << cx))
-DrawAlphaImagePixel(x+cx, y+cy, color, (Bitmap*)screen, alpha);
-}
-}
-x += glyphsize;
-x++;
-}
-}
-
-void DrawImageText(int x, int y, char* str, u32 color, int screen){
-unsigned short* ptr;
-unsigned short glyphsize;
-int i, cx, cy;
-for (i = 0; str[i] != '\0'; i++)
-{
-if (str[i] < 0x21)
-{
-x += 6;
-continue;
-}
-u16 ch = str[i];
-if (ch > 0x7E) ch = 0x7F;
-ptr = &font[(ch-0x20) << 4];
-glyphsize = ptr[0];
-if (!glyphsize)
-{
-x += 6;
-continue;
-}
-x++;
-for (cy = 0; cy < 12; cy++)
-{
-unsigned short val = ptr[4+cy];
-for (cx = 0; cx < glyphsize; cx++)
-{
-if (val & (1 << cx))
-DrawImagePixel(x+cx, y+cy, color, (Bitmap*)screen);
-}
-}
-x += glyphsize;
-x++;
-}
-}
-
-void DebugOutput(char* str){
-unsigned short* ptr;
-unsigned short glyphsize;
-int i, cx, cy;
-int x=0;
-int y=0;
-for (i = 0; str[i] != '\0'; i++)
-{
-if (str[i] == 0x0A){
-x=0;
-y=y+15;
-continue;
-}else if(str[i] == 0x0D){
-continue;
-}
-if (str[i] < 0x21)
-{
-x += 6;
-continue;
-}
-u16 ch = str[i];
-if (ch > 0x7E) ch = 0x7F;
-ptr = &font[(ch-0x20) << 4];
-glyphsize = ptr[0];
-if (!glyphsize)
-{
-x += 6;
-continue;
-}
-x++;
-for (cy = 0; cy < 12; cy++)
-{
-unsigned short val = ptr[4+cy];
-for (cx = 0; cx < glyphsize; cx++)
-{
-if ((x+cx) >= 320){
-x=0;
-y=y+15;
-}
-if (val & (1 << cx))
-DrawPixel(BottomFB, x+cx, y+cy, 0xFFFFFF);
-}
-}
-x += glyphsize;
-x++;
-}
-}
-
-int ConsoleOutput(Console* console){
-unsigned short* ptr;
-unsigned short glyphsize;
-int max_x;
-u8* buffer;
-if (console->screen == 0){
-max_x = 400;
-buffer = TopLFB;
-}else{
-max_x = 320;
-buffer = BottomFB;
-}
-int i, cx, cy;
-int x=0;
-int y=0;
-int res = 0;
-for (i = 0; console->text[i] != '\0'; i++)
-{
-if (y > 230) break;
-if (console->text[i] == 0x0A){
-x=0;
-y=y+15;
-res++;
-continue;
-}else if(console->text[i] == 0x0D){
-res++;
-continue;
-}
-if (console->text[i] < 0x21)
-{
-x += 6;
-res++;
-continue;
-}
-u16 ch = console->text[i];
-if (ch > 0x7E) ch = 0x7F;
-ptr = &font[(ch-0x20) << 4];
-glyphsize = ptr[0];
-if (!glyphsize)
-{
-x += 6;
-res++;
-continue;
-}
-x++;
-if (x >= max_x - 10){
-x=0;
-y=y+15;
-if (y > 230) break;
-}
-for (cy = 0; cy < 12; cy++)
-{
-unsigned short val = ptr[4+cy];
-for (cx = 0; cx < glyphsize; cx++)
-{
-if (val & (1 << cx))
-DrawPixel(buffer, x+cx, y+cy, 0xFFFFFF);
-}
-}
-x += glyphsize;
-x++;
-res++;
-}
-x = 0;
-y = 0;
-return res;
-}
-
-void FillImageRect(int x1,int x2,int y1,int y2,u32 color,int screen){
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
+    int argc = lua_gettop(L);
+    if (argc != 3 && argc != 4 && argc != 5) return luaL_error(L, "wrong number of arguments");
+	int x = luaL_checkinteger(L,1);
+	int y = luaL_checkinteger(L,2);
+	gpu_text* texture = (gpu_text*)luaL_checkinteger(L,3);
+	float scale_x = 1;
+	float scale_y = 1;
+	if (argc > 4){
+		scale_x = luaL_checknumber(L,4);
+		if (argc == 5) scale_y = luaL_checknumber(L,5);
 	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (x1 <= x2){
-		while (y1 <= y2){
-			DrawImagePixel(x1,y1,color,(Bitmap*)screen);
-			y1++;
-		}
-		y1 = base_y;
-		x1++;
-	}
-}
-
-void FillAlphaImageRect(int x1,int x2,int y1,int y2,u32 color,int screen,u8 alpha){
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (x1 <= x2){
-		while (y1 <= y2){
-			DrawAlphaImagePixel(x1,y1,color,(Bitmap*)screen,alpha);
-			y1++;
-		}
-		y1 = base_y;
-		x1++;
-	}
-}
-
-void FillScreenRect(int x1,int x2,int y1,int y2,u32 color,int screen,int side){
-	u8* buffer;
-	if (screen == 0){
-		if (side == 0) buffer = TopLFB;
-		else buffer = TopRFB;
-	}else if (screen == 1) buffer = BottomFB;
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (x1 <= x2){
-		while (y1 <= y2){
-			DrawPixel(buffer,x1,y1,color);
-			y1++;
-		}
-		y1 = base_y;
-		x1++;
-	}
-}
-
-void FillAlphaScreenRect(int x1,int x2,int y1,int y2,u32 color,int screen,int side,u8 alpha){
-	u8* buffer;
-	if (screen == 0){
-		if (side == 0) buffer = TopLFB;
-		else buffer = TopRFB;
-	}else if (screen == 1) buffer = BottomFB;
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (x1 <= x2){
-		while (y1 <= y2){
-			DrawAlphaPixel(buffer,x1,y1,color,alpha);
-			y1++;
-		}
-		y1 = base_y;
-		x1++;
-	}
-}
-
-void FillImageEmptyRect(int x1,int x2,int y1,int y2,u32 color,int screen){
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (y1 <= y2){
-			DrawImagePixel(x1,y1,color,(Bitmap*)screen);
-			DrawImagePixel(x2,y1,color,(Bitmap*)screen);
-			y1++;
-		}
-	while (x1 <= x2){
-		DrawImagePixel(x1,base_y,color,(Bitmap*)screen);
-		DrawImagePixel(x1,y2,color,(Bitmap*)screen);
-	}
-}
-
-void FillAlphaImageEmptyRect(int x1,int x2,int y1,int y2,u32 color,int screen,u8 alpha){
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (y1 <= y2){
-			DrawAlphaImagePixel(x1,y1,color,(Bitmap*)screen,alpha);
-			DrawAlphaImagePixel(x2,y1,color,(Bitmap*)screen,alpha);
-			y1++;
-		}
-	while (x1 <= x2){
-		DrawAlphaImagePixel(x1,base_y,color,(Bitmap*)screen,alpha);
-		DrawAlphaImagePixel(x1,y2,color,(Bitmap*)screen,alpha);
-	}
-}
-
-void FillScreenEmptyRect(int x1,int x2,int y1,int y2,u32 color,int screen,int side){
-	u8* buffer;
-	if (screen == 0){
-		if (side == 0) buffer = TopLFB;
-		else buffer = TopRFB;
-	}else if (screen == 1) buffer = BottomFB;
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (y1 <= y2){
-		DrawPixel(buffer,x1,y1,color);
-		DrawPixel(buffer,x2,y1,color);
-		y1++;
-	}
-	while (x1 <= x2){
-		DrawPixel(buffer,x1,base_y,color);
-		DrawPixel(buffer,x1,y2,color);
-		x1++;
-	}
-}
-
-void FillAlphaScreenEmptyRect(int x1,int x2,int y1,int y2,u32 color,int screen,int side,u8 alpha){
-	u8* buffer;
-	if (screen == 0){
-		if (side == 0) buffer = TopLFB;
-		else buffer = TopRFB;
-	}else if (screen == 1) buffer = BottomFB;
-	if (x1 > x2){
-	int temp_x = x1;
-	x1 = x2;
-	x2 = temp_x;
-	}
-	if (y1 > y2){
-	int temp_y = y1;
-	y1 = y2;
-	y2 = temp_y;
-	}
-	int base_y = y1;
-	while (y1 <= y2){
-		DrawAlphaPixel(buffer,x1,y1,color,alpha);
-		DrawAlphaPixel(buffer,x2,y1,color,alpha);
-		y1++;
-	}
-	while (x1 <= x2){
-		DrawAlphaPixel(buffer,x1,base_y,color,alpha);
-		DrawAlphaPixel(buffer,x1,y2,color,alpha);
-		x1++;
-	}
-}
-
-void ClearScreen(int screen){
-	if (screen==1){
-		memset(BottomFB,0x00,230400);
+	if (scale_y != 1 or scale_x != 1){
+		#ifndef SKIP_ERROR_HANDLING
+		if (texture->magic != 0x4C545854) return luaL_error(L, "attempt to access wrong memory block type");
+		if ((x < 0) || (y < 0)) return luaL_error(L, "out of bounds");
+		#endif
+		sf2d_draw_texture_scale(texture->tex, x, y, scale_x, scale_y);
 	}else{
-		memset(TopLFB,0x00,288000);
-	if (CONFIG_3D_SLIDERSTATE != 0){
-		memset(TopRFB,0x00,288000);
+		#ifndef SKIP_ERROR_HANDLING
+			if (texture->magic != 0x4C545854) return luaL_error(L, "attempt to access wrong memory block type");
+			if ((x < 0) || (y < 0)) return luaL_error(L, "out of bounds");
+			if ((cur_screen == 0) && (x + texture->width > 400)) return luaL_error(L, "out of framebuffer bounds");
+			if ((cur_screen == 1) && (x + texture->width > 320)) return luaL_error(L, "out of framebuffer bounds");
+			if (y + texture->height > 240) return luaL_error(L, "out of framebuffer bounds");
+			if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+		#endif
+		sf2d_draw_texture(texture->tex, x, y);
 	}
-	}
+	return 0;
 }
 
-Bitmap* loadPng(const char* filename)
+static int lua_drawimg_full(lua_State *L)
 {
-	Handle fileHandle;
-	Bitmap* result;
-	u64 size;
-	u32 bytesRead;
-	unsigned char* out;
-	unsigned char* in;
-	unsigned int w, h;
-	
-	FS_path filePath = FS_makePath(PATH_CHAR, filename);
-	FS_archive archive = (FS_archive) { ARCH_SDMC, (FS_path) { PATH_EMPTY, 1, (u8*)"" }};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, archive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
-	
-	FSFILE_GetSize(fileHandle, &size);
-	
-	in = (unsigned char*)malloc(size);
-	
-	if(!in) {
-		FSFILE_Close(fileHandle);
-		svcCloseHandle(fileHandle);
-		return 0;
-	}
-	
-	FSFILE_Read(fileHandle, &bytesRead, 0x00, in, size);
-	FSFILE_Close(fileHandle);
-	svcCloseHandle(fileHandle);
-		
-		if(lodepng_decode32(&out, &w, &h, in, size) != 0) {
-			free(in);
-			return 0;
-		}
-	
-	free(in);
-	
-	result = (Bitmap*)malloc(sizeof(Bitmap));
-	if(!result) {
-		free(out);
-	}
-	
-	result->pixels = out;
-	result->width = w;
-	result->height = h;
-	result->bitperpixel = 32;
-	
-	u8* flipped = (u8*)malloc(w*h*4);
-	flipped = flipBitmap(flipped, result);
-	u32 i = 0;
-	while (i < (w*h*4)){
-	u8 tmp = flipped[i];
-	flipped[i] = flipped[i+2];
-	flipped[i+2] = tmp;
-	i=i+4;
-	}
-	free(out);
-	result->pixels = flipped;
-	
-	return result;
+    int argc = lua_gettop(L);
+    if (argc != 10) return luaL_error(L, "wrong number of arguments");
+	int x = luaL_checkinteger(L, 1);
+    int y = luaL_checkinteger(L, 2);
+	int st_x = luaL_checkinteger(L, 3);
+    int st_y = luaL_checkinteger(L, 4);
+	int width = luaL_checkinteger(L, 5);
+    int height = luaL_checkinteger(L, 6);
+	float radius = luaL_checknumber(L, 7);
+	float scale_x = luaL_checknumber(L, 8);
+	float scale_y = luaL_checknumber(L, 9);
+	gpu_text* texture = (gpu_text*)luaL_checkinteger(L, 10);
+	#ifndef SKIP_ERROR_HANDLING
+		if (texture->magic != 0x4C545854) return luaL_error(L, "attempt to access wrong memory block type");
+		if ((x < 0) || (y < 0)) return luaL_error(L, "out of bounds");
+		if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+	#endif
+	sf2d_draw_texture_rotate_cut_scale(texture->tex, x, y, radius, st_x, st_y, width, height, scale_x, scale_y);
+	return 0;
+}
+
+static int lua_partial(lua_State *L){
+	int argc = lua_gettop(L);
+	if (argc != 7) return luaL_error(L, "wrong number of arguments");
+	int x = luaL_checkinteger(L, 1);
+    int y = luaL_checkinteger(L, 2);
+	int st_x = luaL_checkinteger(L, 3);
+    int st_y = luaL_checkinteger(L, 4);
+	int width = luaL_checkinteger(L, 5);
+    int height = luaL_checkinteger(L, 6);
+	gpu_text* file = (gpu_text*)luaL_checkinteger(L, 7);
+	#ifndef SKIP_ERROR_HANDLING
+		if (file->magic != 0x4C545854) return luaL_error(L, "attempt to access wrong memory block type");
+		if ((x < 0) || (y < 0)) return luaL_error(L, "out of bounds");
+		if ((st_x < 0) || (st_y < 0)) return luaL_error(L, "out of image bounds");
+		if (((st_x + width) > file->width) || (((st_y + height) > file->height))) return luaL_error(L, "out of image bounds");
+		if ((cur_screen == 0) && ((x+width) > 400)) return luaL_error(L, "out of framebuffer bounds");
+		if ((cur_screen == 1) && ((x+width) > 320)) return luaL_error(L, "out of framebuffer bounds");
+		if ((cur_screen <= 1) && ((y+height) > 240)) return luaL_error(L, "out of framebuffer bounds");
+		if (cur_screen != 1 && cur_screen != 0) return luaL_error(L, "you need to call initBlend to use GPU rendering");
+	#endif
+	sf2d_draw_texture_part(file->tex, x, y, st_x, st_y, width, height);
+	return 0;
+}
+
+static int lua_free(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	gpu_text* texture = (gpu_text*)luaL_checkinteger(L,1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (texture->magic != 0x4C545854) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	sf2d_free_texture(texture->tex);
+	free(texture);
+	return 0;
+}
+
+//Register our Graphics Functions
+static const luaL_Reg Graphics_functions[] = {
+  {"init",					lua_init},
+  {"term",					lua_term},
+  {"initBlend",				lua_refresh},
+  {"loadImage",				lua_loadimg},
+  {"drawImage",				lua_drawimg},
+  {"drawPartialImage",		lua_partial},
+  {"drawImageExtended",		lua_drawimg_full},
+  {"fillRect",				lua_rect},
+  {"fillEmptyRect",			lua_emptyrect},
+  {"drawCircle",			lua_fillcircle},
+  {"drawLine",				lua_line},
+  {"termBlend",				lua_end},
+  {"flip",					lua_flip},
+  {"freeImage",				lua_free},
+  {0, 0}
+};
+
+void luaGraphics_init(lua_State *L) {
+	lua_newtable(L);
+	luaL_setfuncs(L, Graphics_functions, 0);
+	lua_setglobal(L, "Graphics");
 }

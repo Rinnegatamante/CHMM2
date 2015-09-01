@@ -27,7 +27,7 @@
 #- Smealum for ctrulib -------------------------------------------------------------------------------------------------#
 #- StapleButter for debug font -----------------------------------------------------------------------------------------#
 #- Lode Vandevenne for lodepng -----------------------------------------------------------------------------------------#
-#- Sean Barrett for stb_truetype ---------------------------------------------------------------------------------------#
+#- Jean-loup Gailly and Mark Adler for zlib ----------------------------------------------------------------------------#
 #- Special thanks to Aurelio for testing, bug-fixing and various help with codes and implementations -------------------#
 #-----------------------------------------------------------------------------------------------------------------------*/
 
@@ -37,19 +37,100 @@
 #include <3ds.h>
 #include "include/luaplayer.h"
 
+struct Timer{
+	u32 magic;
+	bool isPlaying;
+	u64 tick;
+};
 
 static int lua_newT(lua_State *L) {
     int argc = lua_gettop(L);
     if (argc != 0) return luaL_error(L, "wrong number of arguments");
-    lua_pushnumber(L,osGetTime());
+	Timer* new_timer = (Timer*)malloc(sizeof(Timer));
+	new_timer->tick = osGetTime();
+	new_timer->magic = 0x4C544D52;
+	new_timer->isPlaying = true;
+    lua_pushinteger(L,(u32)new_timer);
     return 1;
 }
 
 static int lua_time(lua_State *L) {
     int argc = lua_gettop(L);
     if (argc != 1) return luaL_error(L, "wrong number of arguments");
-    u64 timer = luaL_checknumber(L,1);
-	lua_pushnumber(L,(osGetTime()-timer));
+    Timer* src = (Timer*)luaL_checkinteger(L,1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (src->magic != 0x4C544D52) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (src->isPlaying){
+		lua_pushinteger(L, (osGetTime() - src->tick));
+	}else{
+		lua_pushinteger(L, src->tick);
+	}
+    return 1;
+}
+
+static int lua_pause(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	Timer* src = (Timer*)luaL_checkinteger(L, 1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (src->magic != 0x4C544D52) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (src->isPlaying){
+		src->isPlaying = false;
+		src->tick = (osGetTime()-src->tick);
+	}
+	return 0;
+}
+
+static int lua_resume(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	Timer* src = (Timer*)luaL_checkinteger(L, 1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (src->magic != 0x4C544D52) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (!src->isPlaying){
+		src->isPlaying = true;
+		src->tick = (osGetTime()-src->tick);
+	}
+	return 0;
+}
+
+static int lua_reset(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	Timer* src = (Timer*)luaL_checkinteger(L, 1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (src->magic != 0x4C544D52) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (src->isPlaying) src->tick = osGetTime();
+	else src->tick = 0;
+	return 0;
+}
+
+static int lua_wisPlaying(lua_State *L){
+int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	Timer* src = (Timer*)luaL_checkinteger(L, 1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (src->magic != 0x4C544D52) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	lua_pushboolean(L, src->isPlaying);
+	return 1;
+}
+
+static int lua_destroy(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 1) return luaL_error(L, "wrong number of arguments");
+    Timer* timer = (Timer*)luaL_checkinteger(L,1);
+	#ifndef SKIP_ERROR_HANDLING
+		if (timer->magic != 0x4C544D52) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	free(timer);
     return 1;
 }
 
@@ -57,6 +138,11 @@ static int lua_time(lua_State *L) {
 static const luaL_Reg Timer_functions[] = {
   {"new",							lua_newT},
   {"getTime",						lua_time},
+  {"destroy",						lua_destroy},
+  {"pause",							lua_pause},
+  {"resume",						lua_resume},
+  {"reset",							lua_reset},
+  {"isPlaying",						lua_wisPlaying},
   {0, 0}
 };
 

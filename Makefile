@@ -6,10 +6,7 @@ ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
 
-ifeq ($(strip $(CTRULIB)),)
-# THIS IS TEMPORARY - in the future it should be at $(DEVKITPRO)/libctru
-$(error "Please set CTRULIB in your environment. export CTRULIB=<path to>libctru")
-endif
+LPP_CTRULIB ?= $(CURDIR)/libctru
 
 TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
@@ -33,7 +30,10 @@ include $(DEVKITARM)/3ds_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source/include/lua	source	source/include/lodepng/ source/include/ogg source/include/khax
+SOURCES		:=	source/include/lua	source source/include source/include/Graphics \
+				source/include/ftp source/include/sf2d	source/include/tga source/include/ogg \
+				source/include/lodepng/	source/include/unrar/	source/include/libjpeg \
+				source/include/ttf source/include/khax
 DATA		:=	data
 INCLUDES	:=	include
 
@@ -45,7 +45,7 @@ APP_DESCRIPTION	:=	Theme Swapper for 3DS
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=softfp
 
-CFLAGS	:=	-g -Wall -O2 -mword-relocations \
+CFLAGS	:=	-g -O2 -mword-relocations \
 			-fomit-frame-pointer -ffast-math \
 			$(ARCH)
 
@@ -56,13 +56,13 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lctru -lm
+LIBS	:= -lctru -lm -lz
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:= $(CTRULIB)
+LIBDIRS	:= $(LPP_CTRULIB)
 
 
 #---------------------------------------------------------------------------------
@@ -164,7 +164,8 @@ $(OUTPUT).elf	:	$(OFILES)
 %.vsh.o	:	%.vsh
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
-	@python $(AEMSTRO)/aemstro_as.py $< ../$(notdir $<).shbin
+	#@python $(AEMSTRO)/aemstro_as.py $< ../$(notdir $<).shbin Use this if you have only Python 3.1
+	@C:\Python31\Python.exe $(AEMSTRO)/aemstro_as.py $< ../$(notdir $<).shbin
 	@bin2s ../$(notdir $<).shbin | $(PREFIX)as -o $@
 	@echo "extern const u8" `(echo $(notdir $<).shbin | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"_end[];" > `(echo $(notdir $<).shbin | tr . _)`.h
 	@echo "extern const u8" `(echo $(notdir $<).shbin | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"[];" >> `(echo $(notdir $<).shbin | tr . _)`.h
