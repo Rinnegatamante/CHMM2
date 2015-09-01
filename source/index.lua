@@ -122,13 +122,15 @@ function CropPrint(x, y, text, color, screen)
 	end
 end
 oldpad = Controls.read()
-no_preview = Screen.createImage(400,240)
+no_preview = Screen.createImage(400,240,Color.new(0,0,0))
 preview_mode = false
 if #themes_table == 0 then
 	while true do
 		Screen.refresh()
 		Screen.debugPrint(0,0,"No theme recognized...",white,BOTTOM_SCREEN)
-		Screen.debugPrint(0,15,"Press A to exit.",white,BOTTOM_SCREEN)
+		Screen.debugPrint(0,15,"You have to put themese in:",white,BOTTOM_SCREEN)
+		Screen.debugPrint(0,30,System.currentDirectory(),white,BOTTOM_SCREEN)
+		Screen.debugPrint(0,60,"Press A to exit.",white,BOTTOM_SCREEN)
 		Controls.init()
 		if Controls.check(Controls.read(),KEY_A) then
 			Screen.freeImage(no_preview)
@@ -138,11 +140,24 @@ if #themes_table == 0 then
 		Screen.waitVblankStart()
 	end
 end
+info_cns = Console.new(TOP_SCREEN)
 function UpdateScreens()
 	base_y = 0
+	info_file = System.currentDirectory()..themes_table[p].name.."/info.lua"
+	if System.doesFileExist(info_file) then
+		dofile(info_file)
+	else
+		author = "Unknown"
+		name = "Unknown"
+		desc = "Unknown"
+	end
+	Console.clear(info_cns)
+	Console.append(info_cns, "Name: " .. name  .. "\n")
+	Console.append(info_cns, "Author: " .. author  .. "\n")
+	Console.append(info_cns, "Description: " .. desc .. "\n")
 	if preview_mode then
 		if big_image then
-			if r_width == 400 and r_height == 480 then
+			if r_width == 400 and r_height >= 480 then
 				Screen.drawPartialImage(0,0,0,0,400,240,current_file,TOP_SCREEN)
 				Screen.drawPartialImage(0,0,40,240,320,240,current_file,BOTTOM_SCREEN)
 			elseif r_width == 432 and r_height == 528 then
@@ -160,6 +175,7 @@ function UpdateScreens()
 	else
 		Screen.clear(BOTTOM_SCREEN)
 		Screen.clear(TOP_SCREEN)
+		Console.show(info_cns)
 	end
 	for l, file in pairs(themes_table) do
 		if (base_y > 226) then
@@ -186,7 +202,6 @@ function UpdateScreens()
 end
 Sound.init()
 while true do
-	Controls.init()
 	pad = Controls.read()
 	Screen.refresh()
 	if update_screens then
@@ -236,9 +251,17 @@ while true do
 		if System.doesFileExist(System.currentDirectory()..themes_table[p].name.."/preview.png") then
 			current_file = Screen.loadImage(System.currentDirectory()..themes_table[p].name.."/preview.png")
 		else
-			current_file = no_preview
+			if System.doesFileExist(System.currentDirectory()..themes_table[p].name.."/preview.jpg") then
+				current_file = Screen.loadImage(System.currentDirectory()..themes_table[p].name.."/preview.jpg")
+			else
+				if System.doesFileExist(System.currentDirectory()..themes_table[p].name.."/preview.bmp") then
+					current_file = Screen.loadImage(System.currentDirectory()..themes_table[p].name.."/preview.bmp")
+				else
+					current_file = no_preview
+				end
+			end
 		end
-		if Screen.getImageWidth(current_file) > 400 then
+		if Screen.getImageWidth(current_file) >= 400 then
 			width = 400
 			big_image = true
 			x_print = 0
@@ -248,7 +271,7 @@ while true do
 			big_image = false
 			width = Screen.getImageWidth(current_file)
 		end
-		if Screen.getImageHeight(current_file) > 240 then
+		if Screen.getImageHeight(current_file) >= 240 then
 			height = 240
 			big_image = true
 			x_print = 0
@@ -319,6 +342,7 @@ while true do
 		end
 		Screen.freeImage(no_preview)
 		CloseMusic()
+		Console.destroy(info_cns)
 		Sound.term()
 		System.exit()
 	end
