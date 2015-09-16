@@ -37,9 +37,9 @@ SOURCES		:=	source/include/lua	source source/include source/include/Graphics \
 DATA		:=	data
 INCLUDES	:=	include
 
-APP_TITLE	:=	CHMM
+APP_TITLE	:=	CHMM2
 APP_AUTHOR	:=	Rinnegatamante
-APP_DESCRIPTION	:=	Theme Swapper for 3DS
+APP_DESCRIPTION	:=	Theme Manager for 3DS
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
