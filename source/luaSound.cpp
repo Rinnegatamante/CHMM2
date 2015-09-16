@@ -68,6 +68,7 @@ struct wav{
 	u32 audio_pointer;
 	u32 package_size;
 	u32 total_packages_size;
+	u32 stream_packages_size;
 };
 
 volatile bool closeStream = false;
@@ -101,7 +102,10 @@ void streamOGG(void* arg){ //TODO: Solve looping sound issues
 			if (src->package_size == 0){
 				block_size = src->mem_size / 8;
 				package_max_size = block_size;
-			}else{ 
+			}else if (src->stream_packages_size > 0){
+				block_size = src->stream_packages_size;
+				package_max_size = src->mem_size / 8;
+			}else{
 				block_size = src->total_packages_size / (src->moltiplier - 1);
 				package_max_size = src->mem_size / 8;
 			}
@@ -111,71 +115,65 @@ void streamOGG(void* arg){ //TODO: Solve looping sound issues
 				total = total * 2;
 			}
 			if ((control >= total) && (src->isPlaying)){
-				if (!src->streamLoop){
+				if (src->streamLoop){
+					src->tick = osGetTime();
+					src->moltiplier = 1;
+					control = 0;
+				}else{
+					src->isPlaying = false;
+					src->tick = (osGetTime()-src->tick);
+					src->moltiplier = 1;
 					CSND_setchannel_playbackstate(src->ch, 0);
 					if (src->audiobuf2 != NULL) CSND_setchannel_playbackstate(src->ch2, 0);
 					CSND_sharedmemtype0_cmdupdatestate(0);
-					src->isPlaying = false;
-					src->tick = (osGetTime()-src->tick);
-				}else src->tick = osGetTime();
-				src->total_packages_size = 0;
-				src->moltiplier = 1;
-				ov_raw_seek((OggVorbis_File*)src->sourceFile,0);
-				if (src->audiobuf2 == NULL){ //Mono file
-						int i = 0;
-						int j = src->audio_pointer;
-						while(!eof){
-							long ret=ov_read((OggVorbis_File*)src->sourceFile,pcmout,sizeof(pcmout),0,2,1,&current_section);
-							if (ret == 0) {
-								eof=1;
-							} else {
-								memcpy(&tmp_buf[i],pcmout,ret);
-								i = i + ret;
-								src->package_size = i;
-								if (i >= (package_max_size)) break;
-							}
-						}
-						if (j + src->package_size >= src->mem_size){
-							u32 frag_size = src->mem_size - j;
-							u32 frag2_size = src->package_size-frag_size;
-							memcpy(&src->audiobuf[j],tmp_buf,frag_size);
-							memcpy(src->audiobuf,&tmp_buf[frag_size],frag2_size);
-							src->audio_pointer = frag2_size;
-						}else{
-							memcpy(&src->audiobuf[j],tmp_buf,src->package_size);
-							src->audio_pointer = j + src->package_size;
-						}
-						src->total_packages_size = src->total_packages_size + src->package_size;
-					}else{ //Stereo file
-						int i = 0;
-						while(!eof){
-							long ret=ov_read((OggVorbis_File*)src->sourceFile,pcmout,sizeof(pcmout),0,2,1,&current_section);
-							if (ret == 0) {
-								eof=1;
-							} else {
-								memcpy(&tmp_buf[i],pcmout,ret);
-								i = i + ret;
-								src->package_size = i;
-								if (i >= (package_max_size)) break;
-							}
-						}
+					ov_raw_seek((OggVorbis_File*)src->sourceFile,0);
+					if (src->audiobuf2 == NULL){ //Mono file
+					int i = 0;
+					while(!eof){
+						long ret=ov_read((OggVorbis_File*)src->sourceFile,pcmout,sizeof(pcmout),0,2,1,&current_section);
+						if (ret == 0) {
+		
+							// EOF
+							eof=1;
 				
-						// Separating left and right channels
-						int z;
-						int j = src->audio_pointer;
-						for (z=0; z <= src->package_size; z=z+4){
-							src->audiobuf[j] = tmp_buf[z];
-							src->audiobuf[j+1] = tmp_buf[z+1];
-							src->audiobuf2[j] = tmp_buf[z+2];
-							src->audiobuf2[j+1] = tmp_buf[z+3];
-							j=j+2;
-							if (j >= src->mem_size / 2) j = 0;
+						} else {
+					
+							// Copying decoded block to PCM16 audiobuffer
+							memcpy(&src->audiobuf[i],pcmout,ret);
+							i = i + ret;
+							if (i >= src->mem_size) break;
 						}
-						src->audio_pointer = j;
-						src->total_packages_size = src->total_packages_size + src->package_size;
 					}
-					src->moltiplier = src->moltiplier + 1;
-			}else if ((control > (block_size * src->moltiplier)) && (src->isPlaying)){
+				}else{ //Stereo file
+					int i = 0;
+					while(!eof){
+						long ret=ov_read((OggVorbis_File*)src->sourceFile,pcmout,sizeof(pcmout),0,2,1,&current_section);
+						if (ret == 0) eof=1;
+						else {
+		
+							// Copying decoded block to PCM16 audiobuffer
+							memcpy(&tmp_buf[i],pcmout,ret);
+							i = i + ret;
+							if (i >= src->mem_size) break;	
+						}
+					}
+				
+						// Separating left and right channels
+					int z;
+					int j = 0;
+					for (z=0; z < src->mem_size; z=z+4){
+						src->audiobuf[j] = tmp_buf[z];
+						src->audiobuf[j+1] = tmp_buf[z+1];
+						src->audiobuf2[j] = tmp_buf[z+2];
+						src->audiobuf2[j+1] = tmp_buf[z+3];
+						j=j+2;
+						if (j >= src->mem_size / 2) j = 0;
+					}
+				}
+				src->moltiplier = 1;
+				}
+			}
+			if ((control >= (block_size * src->moltiplier)) && (src->isPlaying)){
 				if (src->audiobuf2 == NULL){ //Mono file
 						int i = 0;
 						int j = src->audio_pointer;
@@ -206,11 +204,15 @@ void streamOGG(void* arg){ //TODO: Solve looping sound issues
 						while(!eof){
 							long ret=ov_read((OggVorbis_File*)src->sourceFile,pcmout,sizeof(pcmout),0,2,1,&current_section);
 							if (ret == 0) {
-								eof=1;
+								if (!src->streamLoop) eof=1;
+								else{
+									src->stream_packages_size = block_size;
+									ov_raw_seek((OggVorbis_File*)src->sourceFile,0);
+								}
 							} else {
 								memcpy(&tmp_buf[i],pcmout,ret);
 								i = i + ret;
-								src->package_size = i;
+							    src->package_size = i;
 								if (i >= (package_max_size)) break;
 							}
 						}
@@ -218,7 +220,7 @@ void streamOGG(void* arg){ //TODO: Solve looping sound issues
 						// Separating left and right channels
 						int z;
 						int j = src->audio_pointer;
-						for (z=0; z <= src->package_size; z=z+4){
+						for (z=0; z < src->package_size; z=z+4){
 							src->audiobuf[j] = tmp_buf[z];
 							src->audiobuf[j+1] = tmp_buf[z+1];
 							src->audiobuf2[j] = tmp_buf[z+2];
@@ -471,6 +473,7 @@ static int lua_openogg(lua_State *L)
 	wav_file->size = ov_time_total(vf,-1) * 2 * my_info->rate;
 	wav_file->startRead = 0;
 	wav_file->total_packages_size = 0;
+	wav_file->stream_packages_size = 0;
 	wav_file->package_size = 0;
 	wav_file->audio_pointer = 0;
 	strcpy(wav_file->author,"");
@@ -495,6 +498,7 @@ static int lua_openogg(lua_State *L)
 	fread(&info_size,4,1,fp);
 	while (info_size != 0x6F760501){
 		offset = ftell(fp);
+		if (offset > 0x200) break; // Temporary patch for files without COMMENT section
 		fread(&info_type,6,1,fp);
 		if ((strcmp((const char*)&info_type,"ARTIST") == 0) || (strcmp((const char*)&info_type,"artist") == 0)){
 			fseek(fp,0x01,SEEK_CUR);
