@@ -69,6 +69,7 @@ static int lua_exit(lua_State *L)
 	if (isCSND) CSND_shutdown();
 	char string[20];
 	strcpy(string,"lpp_exit_0456432");
+	luaL_dostring(L, "collectgarbage()");
 	return luaL_error(L, string); // NOTE: This is a fake error
 }
 
