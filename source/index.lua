@@ -58,10 +58,10 @@ function ReloadValue(p_idx, t_idx)
 		preview_info[p_idx] = {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[t_idx].name, ["icon"] = p2}
 	end	
 end
-function PrintTitle(version)
+function PrintTitle(version_bool)
 	Font.setPixelSizes(font, 16)
 	Font.print(font, 5, 5, "CHMM2 - Theme Manager for Nintendo 3DS", Color.new(255, 255, 255), BOTTOM_SCREEN)
-	if version then
+	if version_bool then
 		Font.print(font, 5, 225, "v."..version, Color.new(255, 255, 255), BOTTOM_SCREEN)
 	end
 end
@@ -803,13 +803,6 @@ while true do
 		theme_setting = io.open(System.currentDirectory().."settings.cfg",FCREATE)
 		io.write(theme_setting,0,"col_idx = " .. col_idx,11)
 		io.close(theme_setting)
-		file = "/chmm_0"
-		screen_i = 0
-		while System.doesFileExist(file..".bmp") do
-			screen_i = screen_i + 1
-			file = "/chmm_" .. screen_i
-		end
-		System.takeScreenshot(file,false)
 	end
 	oldpad = pad
 end
