@@ -1159,6 +1159,26 @@ Bitmap* decodePNGfile(const char* filename)
 	return result;
 }
 
+Bitmap* decodePNGbuffer(unsigned char* in, u64 size)
+{
+	Bitmap* result;
+	unsigned char* out;
+	unsigned int w, h;
+		
+	if(lodepng_decode32(&out, &w, &h, in, size) != 0) return 0;
+	
+	result = (Bitmap*)malloc(sizeof(Bitmap));
+	if(!result) {
+		free(out);
+	}
+	
+	result->pixels = out;
+	result->width = w;
+	result->height = h;
+	result->bitperpixel = 32;
+	return result;
+}
+
 void linecpy(u8* screen,u16 x,u16 y,u16 width,u16 height, u8* image,u16 x_img,u16 y_img){
 	for (int i=y_img; i<y_img+height; i++){
 		for (int j=x_img; j<x_img+width; j++){
@@ -1329,7 +1349,7 @@ Bitmap* decodeBMPfile(const char* fname){
 		u8 tmp = result->pixels[i];
 		result->pixels[i] = result->pixels[i+2];
 		result->pixels[i+2] = tmp;
-		i=i+result->bitperpixel;
+		i= i + (result->bitperpixel / 8);
 	}
 	
 	return result;

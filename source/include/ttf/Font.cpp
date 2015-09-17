@@ -37,24 +37,21 @@ unsigned char* Font::loadFromFile(const std::string& filename)
 	fread(buffer, 1, buffer_size, fp);
 	fclose(fp);
 
-	bool ret = loadFromMemory(buffer, buffer_size);
+	loadFromMemory(buffer, buffer_size);
 
 	//free(buffer);
 
 	return buffer;
 }
 
-bool Font::loadFromMemory(const unsigned char* buffer, unsigned int buffer_size)
+unsigned char* Font::loadFromMemory(const unsigned char* buffer, unsigned int buffer_size)
 {
-	if (!buffer || buffer_size == 0)
-		return false;
-	if (stbtt_InitFont(&m_info, buffer, 0) != 1)
-		return false;
+	stbtt_InitFont(&m_info, buffer, 0);
 	m_scale = stbtt_ScaleForPixelHeight(&m_info, 16);
-	return true;
+	return (unsigned char*)buffer;
 }
 
-bool Font::loadFromMemory(const std::vector<unsigned char>& buffer)
+unsigned char* Font::loadFromMemory(const std::vector<unsigned char>& buffer)
 {
 	if (buffer.size() == 0)
 		return false;

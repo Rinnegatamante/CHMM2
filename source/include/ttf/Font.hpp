@@ -21,9 +21,9 @@ public:
 
 	unsigned char* loadFromFile(const std::string& filename);
 
-	bool loadFromMemory(const unsigned char* buffer, unsigned int buffer_size);
+	unsigned char* loadFromMemory(const unsigned char* buffer, unsigned int buffer_size);
 
-	bool loadFromMemory(const std::vector<unsigned char>& buffer);
+	unsigned char* loadFromMemory(const std::vector<unsigned char>& buffer);
 
 	void setSize(int pixels);
 

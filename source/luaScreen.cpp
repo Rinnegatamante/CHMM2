@@ -39,6 +39,7 @@
 #include "include/luaplayer.h"
 #include "include/Graphics/Graphics.h"
 #include "include/ttf/Font.hpp"
+#include "main_font.cpp"
 
 #define stringify(str) #str
 #define VariableRegister(lua, value) do { lua_pushinteger(lua, value); lua_setglobal (lua, stringify(value)); } while(0)
@@ -683,6 +684,20 @@ static int lua_loadFont(lua_State *L) {
     return 1;
 }
 
+static int lua_loadMainFont(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	Font F;
+    unsigned char* buffer = F.loadFromMemory(main_ttf,size_main_ttf);
+	F.setSize(16);
+	ttf* result = (ttf*)malloc(sizeof(ttf));
+	result->buffer = buffer;
+	result->f = F;
+	result->magic = 0x4C464E54;
+	lua_pushinteger(L,(u32)result);
+    return 1;
+}
+
 static int lua_fsize(lua_State *L) {
     int argc = lua_gettop(L);
     if (argc != 2) return luaL_error(L, "wrong number of arguments");
@@ -785,6 +800,7 @@ static const luaL_Reg Screen_functions[] = {
 //Register our Font Functions
 static const luaL_Reg Font_functions[] = {
   {"load",					lua_loadFont}, 
+  {"loadMain",				lua_loadMainFont},
   {"print",					lua_fprint}, 
   {"setPixelSizes",			lua_fsize}, 
   {"unload",				lua_unloadFont}, 
