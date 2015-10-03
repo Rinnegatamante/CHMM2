@@ -86,6 +86,7 @@ int main(int argc,char** argv){
 	fclose(input);
 	printf("\nSending file...");
 	send(my_socket->sock, buffer, size, 0);
+	while (recv(my_socket->sock, NULL, 9, 0) < 1){}
 	printf("\nFile successfully sent!");
 	close(my_socket->sock);
 	free(buffer);
