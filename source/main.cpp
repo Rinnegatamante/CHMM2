@@ -46,6 +46,7 @@ char cur_dir[256];
 char start_dir[256];
 bool CIA_MODE;
 bool is3DSX;
+bool isNinjhax2;
 
 int main(int argc, char **argv)
 {
@@ -62,16 +63,23 @@ int main(int argc, char **argv)
 	Result ret=APT_SetAppCpuTimeLimit(NULL, 30);
 	aptCloseSession();
 	fsInit();
-	hbInit();
 	Handle fileHandle;
 	u64 size;
 	u32 bytesRead;
 	int restore;
 	
-	if (argc > 0){
-		is3DSX = true;
-		khaxInit();
-	}else is3DSX = false;
+	if (argc > 0) is3DSX = true;
+	else is3DSX = false;
+	
+	// Check user build and enables kernel access
+	if (nsInit()==0){
+		CIA_MODE = true;
+		nsExit();
+	}else CIA_MODE = false;
+	isNinjhax2 = false;
+	if (!hbInit()) khaxInit();
+	else isNinjhax2 = true;
+	
 	
 	while(aptMainLoop())
 	{

@@ -47,6 +47,7 @@ int FWRITE = 1;
 int FCREATE = 2;
 int NAND = 0;
 int SDMC = 1;
+extern bool isNinjhax2;
 
 FS_archive main_extdata_archive;
 
@@ -163,9 +164,7 @@ static int lua_checkexist(lua_State *L)
 	FS_archive sdmcArchive=(FS_archive){ARCH_SDMC, (FS_path){PATH_EMPTY, 1, (u8*)""}};
 	FS_path filePath=FS_makePath(PATH_CHAR, file_tbo);
 	Result ret=FSUSER_OpenFileDirectly(NULL, &fileHandle, sdmcArchive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
-	if (!ret){
-	FSFILE_Close(fileHandle);
-	}
+	if (!ret) FSFILE_Close(fileHandle);
 	svcCloseHandle(fileHandle);
 	lua_pushboolean(L,!ret);
 	return 1;
@@ -175,7 +174,8 @@ static int lua_checkbuild(lua_State *L)
 {
     int argc = lua_gettop(L);
     if (argc != 0) return luaL_error(L, "wrong number of arguments");
-	if (CIA_MODE) lua_pushinteger(L,1);
+	if (isNinjhax2) lua_pushinteger(L,2);
+	else if (CIA_MODE) lua_pushinteger(L,1);
 	else lua_pushinteger(L,0);
 	return 1;
 }
@@ -359,8 +359,11 @@ static int lua_getFW(lua_State *L)
 {
     int argc = lua_gettop(L);
     if (argc != 0) return luaL_error(L, "wrong number of arguments");
-	lua_pushinteger(L,osGetFirmVersion());
-    return 1;
+	u32 fw_id = osGetFirmVersion();
+	lua_pushinteger(L,GET_VERSION_MAJOR(fw_id));
+	lua_pushinteger(L,GET_VERSION_MINOR(fw_id));
+	lua_pushinteger(L,GET_VERSION_REVISION(fw_id));
+    return 3;
 }
 
 static int lua_getLang(lua_State *L)
@@ -373,12 +376,40 @@ static int lua_getLang(lua_State *L)
     return 1;
 }
 
+static int lua_getUsername(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	char username_tmp[0x1C];
+	char username[0x0E];
+	CFGU_GetConfigInfoBlk2(0x1C, 0xA0000, (u8*)&username_tmp);
+	for (int i = 0; i < 0x0E; i++){
+		username[i] = username_tmp[i * 2];
+	}
+	lua_pushstring(L,username);
+    return 1;
+}
+
+static int lua_getBirth(lua_State *L)
+{
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	u8 birthday[0x02];
+	CFGU_GetConfigInfoBlk2(0x02, 0xA0001, (u8*)&birthday);
+	lua_pushinteger(L,birthday[0x01]);
+	lua_pushinteger(L,birthday[0x00]);
+    return 2;
+}
+
 static int lua_getK(lua_State *L)
 {
     int argc = lua_gettop(L);
     if (argc != 0) return luaL_error(L, "wrong number of arguments");
-	lua_pushinteger(L,osGetKernelVersion());
-    return 1;
+	u32 fw_id = osGetKernelVersion();
+	lua_pushinteger(L,GET_VERSION_MAJOR(fw_id));
+	lua_pushinteger(L,GET_VERSION_MINOR(fw_id));
+	lua_pushinteger(L,GET_VERSION_REVISION(fw_id));
+    return 3;
 }
 
 static int lua_getCurrentDirectory(lua_State *L)
@@ -770,6 +801,7 @@ static int lua_launch(lua_State *L){
 	__system_retAddr = launchFile;
 	char string[20];
 	strcpy(string,"lpp_exit_0456432");
+	luaL_dostring(L, "collectgarbage()");
 	return luaL_error(L, string); // NOTE: This is a fake error
 }
 
@@ -1169,50 +1201,6 @@ static int lua_ZipExtract(lua_State *L) {
 	return 1;
 }
 
-static int lua_RarExtract(lua_State *L) {
-	int argc = lua_gettop(L);
-	if(argc != 2)
-		return luaL_error(L, "wrong number of arguments.");
-	const char *FileToExtract = luaL_checkstring(L, 1);
-	const char *DirTe = luaL_checkstring(L, 2);
-	FS_archive sdmcArchive = (FS_archive){0x9, (FS_path){PATH_EMPTY, 1, (u8*)""}};
-	FSUSER_OpenArchive(NULL, &sdmcArchive);
-	FS_path TEMP_PATH=FS_makePath(PATH_CHAR, DirTe);
-	FSUSER_CreateDirectory(NULL,sdmcArchive,TEMP_PATH);
-	char tmpFile2[1024];
-	char tmpPath2[1024];
-	sdmcInit();
-	strcpy(tmpPath2,"sdmc:");
-	strcat(tmpPath2,(char*)DirTe);
-	chdir(tmpPath2);
-	strcpy(tmpFile2,"sdmc:");
-	strcat(tmpFile2,(char*)FileToExtract);
-	unrar_t* inp;
-	unrar_open( &inp, tmpFile2 );
-	Handle fileHandle;
-	u32 bytesWritten;
-	while (!unrar_done(inp)){
-		unrar_info_t* file_info = (unrar_info_t*)malloc(sizeof(unrar_info_t));
-		file_info = (unrar_info_t*)unrar_info(inp);
-		u8* buffer = (u8*)malloc(file_info->size);
-		unrar_extract(inp, buffer, file_info->size);
-		char fname[256];
-		strcpy(fname,DirTe);
-		strcat(fname,file_info->name);
-		FS_path filePath=FS_makePath(PATH_CHAR, fname);
-		FSUSER_OpenFileDirectly(NULL, &fileHandle, sdmcArchive, filePath, FS_OPEN_CREATE|FS_OPEN_WRITE, FS_ATTRIBUTE_NONE);
-		FSFILE_Write(fileHandle, &bytesWritten, 0, buffer, file_info->size, 0x10001);
-		FSFILE_Close(fileHandle);
-		free(buffer);
-		free(file_info);
-		unrar_next(inp);
-	}
-	unrar_close(inp);
-	sdmcExit();
-	FSUSER_CloseArchive(NULL, &sdmcArchive);
-	return 0;
-}
-
 static int lua_model(lua_State *L) {
 	int argc = lua_gettop(L);
 	if(argc != 0 ) return luaL_error(L, "wrong number of arguments.");
@@ -1247,23 +1235,6 @@ static int lua_reboot(lua_State *L) {
 	return 0;
 }
 
-static Handle nsHandle;
-
-Result NS_RebootToTitle(u8 mediatype, u64 titleid)
-{
-Result ret = 0;
-u32 *cmdbuf = getThreadCommandBuffer();
-cmdbuf[0] = 0x00100180;
-cmdbuf[1] = 0x1;
-cmdbuf[2] = titleid & 0xffffffff;
-cmdbuf[3] = (titleid >> 32) & 0xffffffff;
-cmdbuf[4] = mediatype;
-cmdbuf[5] = 0x0; // reserved
-cmdbuf[6] = 0x0;
-if((ret = svcSendSyncRequest(nsHandle))!=0)return ret;
-return (Result)cmdbuf[1];
-}
-
 static int lua_startcard(lua_State *L) {
 	int argc = lua_gettop(L);
 	if(argc != 0 ) return luaL_error(L, "wrong number of arguments.");
@@ -1271,6 +1242,7 @@ static int lua_startcard(lua_State *L) {
 	char product_id[16];
 	AM_GetTitleProductCode(mediatype_GAMECARD, 0, product_id);
 	amExit();
+	luaL_dostring(L, "collectgarbage()");
 	if (product_id[0] == 'C' and product_id[1] == 'T' and product_id[2] == 'R'){
 		u8 buf0[0x300];
 		u8 buf1[0x20];
@@ -1281,9 +1253,9 @@ static int lua_startcard(lua_State *L) {
 		APT_DoAppJump(NULL, 0x300, 0x20, buf0, buf1);
 		aptCloseSession();
 	}else{
-		srvGetServiceHandle(&nsHandle, "ns:s"); 
+		nsInit();
 		NS_RebootToTitle(mediatype_GAMECARD,0);
-		svcCloseHandle(nsHandle);
+		nsExit();
 	}
 	for (;;){}
 	return 0;
@@ -1321,6 +1293,7 @@ static int lua_launchCia(lua_State *L){
 	u64 id = unique_id | ((u64)0x00040000 << 32);
 	memset(buf0, 0, 0x300);
 	memset(buf1, 0, 0x20);
+	luaL_dostring(L, "collectgarbage()");
 	aptOpenSession();
 	APT_PrepareToDoAppJump(NULL, 0, id, mediatype);
 	APT_DoAppJump(NULL, 0x300, 0x20, buf0, buf1);
@@ -1442,7 +1415,6 @@ static const luaL_Reg System_functions[] = {
   {"extractCIA",			lua_ciainfo},
   {"getRegion",				lua_getRegion},
   {"extractZIP",			lua_ZipExtract},
-  {"extractRAR",			lua_RarExtract},
   {"getModel",				lua_model},
   {"showHomeMenu",			lua_syscall1},
   {"checkStatus",			lua_appstatus},
@@ -1451,6 +1423,8 @@ static const luaL_Reg System_functions[] = {
   {"getFreeSpace",			lua_freespace},
   {"getTime",				lua_gettime},
   {"getDate",				lua_getdate},
+  {"getUsername",			lua_getUsername},
+  {"getBirthday",			lua_getBirth},
   {"addNotification",		lua_addnews},
 // I/O Module and Dofile Patch
   {"openFile",				lua_openfile},

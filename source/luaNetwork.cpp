@@ -32,7 +32,6 @@
 #-----------------------------------------------------------------------------------------------------------------------*/
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <malloc.h>
 #include <unistd.h>
@@ -46,22 +45,13 @@
 #include "include/ftp/ftp.h"
 
 static int connfd;
-
-static int lua_initFTP(lua_State *L) {
-    int argc = lua_gettop(L);
-    if (argc != 0) return luaL_error(L, "wrong number of arguments");
-    ftp_init();
-	sprintf(shared_ftp,"Waiting for connection...");
-	connfd = -1;
-    return 0;
-}
-
-static int lua_termFTP(lua_State *L) {
-    int argc = lua_gettop(L);
-    if (argc != 0) return luaL_error(L, "wrong number of arguments");
-    ftp_exit();
-    return 0;
-}
+typedef struct
+{
+	u32 magic;
+	u32 sock;
+	struct sockaddr_in addrTo;
+	bool serverSocket;
+} Socket;
 
 static int lua_checkFTPcommand(lua_State *L){
 	int argc = lua_gettop(L);
@@ -102,9 +92,7 @@ static int lua_macaddr(lua_State *L){
 static int lua_ipaddr(lua_State *L){
 	int argc = lua_gettop(L);
 	if (argc != 0) return luaL_error(L, "wrong number of arguments");
-	SOC_Initialize((u32*)memalign(0x1000, 0x100000), 0x100000);
 	u32 ip=(u32)gethostid();
-	SOC_Shutdown();
 	char ip_address[64];
 	sprintf(ip_address,"%lu.%lu.%lu.%lu", ip & 0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
 	lua_pushstring(L,ip_address);
@@ -251,41 +239,6 @@ static int lua_sendmail(lua_State *L){ //BETA func
 	return 1;
 }
 
-static int lua_initIRDA(lua_State *L){
-	int argc = lua_gettop(L);
-    if (argc != 0) return luaL_error(L, "wrong number of arguments");
-	u32* iru_mem = (u32*)linearAlloc(2048);
-	IRU_Initialize(iru_mem, 2048);
-	return 0;
-}
-
-static int lua_receive(lua_State *L){
-	int argc = lua_gettop(L);
-    if (argc != 1) return luaL_error(L, "wrong number of arguments");
-	char result[2048];
-	u32 received_bytes = 0;
-	u8 flag = luaL_checkinteger(L,1);
-	IRU_RecvData((u8*)&result, 2048, flag, &received_bytes, 0);
-	//u32 confirm = 0xDEAD;
-	//IRU_SendData((u8*)confirm, 4, 1);
-	lua_pushlstring(L,result,20);
-	lua_pushnumber(L,flag);
-	return 2;
-}
-
-static int lua_send(lua_State *L){
-	int argc = lua_gettop(L);
-    if (argc != 1) return luaL_error(L, "wrong number of arguments");
-	const char *data = luaL_checkstring(L, 1);
-	u32 result = 0x0000;
-	u32 received_bytes;
-	while (result != 0xDEAD){
-		IRU_SendData((u8*)data, strlen(data), 1);
-		IRU_RecvData((u8*)&result, 4, 0x01, &received_bytes, 1);
-	}
-	return 0;
-}
-
 static int lua_wifilevel(lua_State *L){
 	int argc = lua_gettop(L);
     if (argc != 0) return luaL_error(L, "wrong number of arguments");
@@ -294,13 +247,169 @@ static int lua_wifilevel(lua_State *L){
 	return 1;
 }
 
+static int lua_initSock(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	ftp_init();
+	sprintf(shared_ftp,"Waiting for connection...");
+	connfd = -1;
+	return 0;
+}
+
+static int lua_createServerSocket(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 1) 
+	return luaL_error(L, "Socket.createServerSocket(port) takes one argument.");
+	int port = luaL_checkinteger(L, 1);
+
+	Socket* my_socket = (Socket*) malloc(sizeof(Socket));
+	my_socket->serverSocket = true;
+
+	my_socket->sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (my_socket->sock <= 0) {
+		return luaL_error(L, "invalid socket.");
+	}
+
+	my_socket->addrTo.sin_family = AF_INET;
+	my_socket->addrTo.sin_port = htons(port);
+	my_socket->addrTo.sin_addr.s_addr = 0;
+
+	int err = bind(my_socket->sock, (struct sockaddr*)&my_socket->addrTo, sizeof(my_socket->addrTo));
+	if (err != 0) {
+		return luaL_error(L, "bind error.");
+	}
+
+	fcntl(my_socket->sock, F_SETFL, O_NONBLOCK);
+
+	err = listen(my_socket->sock, 1);
+	if (err != 0) {
+		return luaL_error(L, "listen error.");
+	}
+	
+	my_socket->magic = 0xDEADDEAD;
+	lua_pushinteger(L,(u32)my_socket);
+	return 1;
+}
+
+static int lua_shutSock(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	ftp_exit();
+	return 0;
+}
+
+static int lua_recv(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 2) return luaL_error(L, "wrong number of arguments");
+
+	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
+	u32 size = luaL_checkinteger(L, 2);
+	
+	#ifndef SKIP_ERROR_HANDLING
+		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (my_socket->serverSocket) return luaL_error(L, "recv not allowed for server sockets.");
+
+	char* data = (char*)malloc(size);
+	int count = recv(my_socket->sock, data, size, 0);
+	if (count > 0) lua_pushlstring(L, data, count);
+	else lua_pushstring(L, "");
+	return 1;
+}
+
+static int lua_send(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 2) return luaL_error(L, "wrong number of arguments");
+
+	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
+	size_t size;
+	char* text = (char*)luaL_checklstring(L, 2, &size);
+
+	#ifndef SKIP_ERROR_HANDLING
+		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (my_socket->serverSocket) return luaL_error(L, "send not allowed for server sockets.");
+	if (!text) return luaL_error(L, "Socket.send() expected a string.");
+	
+	int result = sendto(my_socket->sock, text, size, 0, NULL, 0);
+	lua_pushinteger(L, result);
+	return 1;
+}
+
+static int lua_connect(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 2) return luaL_error(L, "wrong number of arguments");
+
+	Socket* my_socket = (Socket*) malloc(sizeof(Socket));
+	my_socket->serverSocket = false;
+	my_socket->magic = 0xDEADDEAD;
+	
+	const char *host = luaL_checkstring(L, 1);
+	int port = luaL_checkinteger(L, 2);
+	my_socket->addrTo.sin_family = AF_INET;
+	my_socket->addrTo.sin_port = htons(port);
+	my_socket->addrTo.sin_addr.s_addr = inet_addr(host);
+
+	my_socket->sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (my_socket->sock < 0) return luaL_error(L, "Failed creating socket.");
+	fcntl(my_socket->sock, F_SETFL, O_NONBLOCK);
+
+	int err = connect(my_socket->sock, (struct sockaddr*)&my_socket->addrTo, sizeof(my_socket->addrTo));
+	if (err < 0 ) return luaL_error(L, "Failed connecting server.");
+	
+	lua_pushinteger(L, (u32)my_socket);
+	return 1;
+}
+
+static int lua_accept(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 1) return luaL_error(L, "wrong number of arguments");
+
+	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
+	
+	#ifndef SKIP_ERROR_HANDLING
+		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	if (!my_socket->serverSocket) return luaL_error(L, "accept allowed for server sockets only.");
+
+	struct sockaddr_in addrAccept;
+	socklen_t cbAddrAccept = sizeof(addrAccept);
+	int sockClient = accept(my_socket->sock, (struct sockaddr*)&addrAccept, &cbAddrAccept);
+	if (sockClient <= 0) return 0;
+
+	Socket* incomingSocket = (Socket*) malloc(sizeof(Socket));
+	incomingSocket->serverSocket = 0;
+	incomingSocket->sock = sockClient;
+	incomingSocket->addrTo = addrAccept;
+	incomingSocket->magic = 0xDEADDEAD;
+	lua_pushinteger(L, (u32)incomingSocket);
+	return 1;
+}
+
+static int lua_closeSock(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	if (argc != 1) return luaL_error(L, "Socket.close() takes one argument.");
+
+	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
+	
+	#ifndef SKIP_ERROR_HANDLING
+		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+	#endif
+	closesocket(my_socket->sock);
+	free(my_socket);
+	return 0;
+}
+
 //Register our Network Functions
 static const luaL_Reg Network_functions[] = {
-  {"initIRDA",				lua_initIRDA},
-  {"recvIRDA",				lua_receive},
-  {"sendIRDA",				lua_send},
-  {"initFTP",				lua_initFTP},
-  {"termFTP",				lua_termFTP},
   {"updateFTP",				lua_checkFTPcommand},
   {"isWifiEnabled",			lua_wifistat},
   {"getWifiLevel",			lua_wifilevel},
@@ -312,8 +421,24 @@ static const luaL_Reg Network_functions[] = {
   {0, 0}
 };
 
+//Register our Socket Functions
+static const luaL_Reg Socket_functions[] = {
+  {"init",				lua_initSock},
+  {"term",				lua_shutSock},
+  {"createServerSocket",lua_createServerSocket},
+  {"connect",			lua_connect},
+  {"receive",			lua_recv},
+  {"send",				lua_send},
+  {"accept",			lua_accept},
+  {"close",				lua_closeSock},
+  {0, 0}
+};
+
 void luaNetwork_init(lua_State *L) {
 	lua_newtable(L);
 	luaL_setfuncs(L, Network_functions, 0);
 	lua_setglobal(L, "Network");
+	lua_newtable(L);
+	luaL_setfuncs(L, Socket_functions, 0);
+	lua_setglobal(L, "Socket");
 }
