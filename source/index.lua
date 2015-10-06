@@ -1,9 +1,10 @@
 colors = {
-		{Color.new(0,132,255), Color.new(72,185,255)}, -- Cyan
-		{Color.new(255,132,0), Color.new(255,185,72)}, -- Orange
-		{Color.new(255,72,72), Color.new(255,132,132)}, -- Pink
-		{Color.new(255,0,0), Color.new(255,72,72)}, 	-- Red
-		{Color.new(255,72,255), Color.new(255,185,255)}	-- Magenta
+		{Color.new(0,132,255), Color.new(72,185,255), Color.new(0,132,255)},  -- Cyan
+		{Color.new(255,132,0), Color.new(255,185,72), Color.new(255,132,0)},  -- Orange
+		{Color.new(255,72,72), Color.new(255,132,132), Color.new(255,72,72)}, -- Pink
+		{Color.new(255,0,0), Color.new(255,72,72), Color.new(255,0,0)}, 	  -- Red
+		{Color.new(255,72,255), Color.new(255,185,255), Color.new(255,72,255)},	-- Magenta
+		{Color.new(72,72,72), Color.new(0,0,0), Color.new(0,255,0)}	-- Black'N'Green
 		}
 if System.currentDirectory() == "/" then
 	System.currentDirectory("/Themes/")
@@ -15,11 +16,111 @@ if System.doesFileExist(System.currentDirectory().."settings.cfg") then
 else
 	col_idx = 1
 end
-version = "2.0 BETA"
+if System.checkBuild() == 2 then -- Patch to disable broken socketing features on NH2
+	old_funcs = {["init"] = Socket.init,
+				 ["term"] = Socket.term,
+				 ["createServerSocket"] = Socket.createServerSocket,
+				 ["accept"] = Socket.accept,
+				 ["receive"] = Socket.receive,
+				 ["send"] = Socket.send,
+				 ["close"] = Socket.close,
+				}
+	function Socket.init()
+		return nil
+	end
+	function Socket.term()
+		return nil
+	end
+	function Socket.createServerSocket(stub)
+		return nil
+	end
+	function Socket.accept(stub)
+		return nil
+	end
+	function Socket.receive(stub, stub)
+		return nil
+	end
+	function Socket.send(stub)
+		return nil
+	end
+	function Socket.close(stub)
+		return nil
+	end
+end
+konami_code = {KEY_DUP, KEY_DUP, KEY_DDOWN, KEY_DDOWN, KEY_DLEFT, KEY_DRIGHT, KEY_DLEFT, KEY_DRIGHT, KEY_B, KEY_A}
+konami_idx = 1
+opt_idx = 1
+if list_style == nil then
+	list_style = false
+end
+options_menu = false
+if list_style then
+	opt_voices = {"Listing mode: Textlist", "Exit CHMM2"}
+else
+	opt_voices = {"Listing mode: Ringmenu", "Exit CHMM2"}
+end
+function OptionExecute(voice_num)
+	if voice_num == 1 then
+		list_style = not list_style
+		if list_style then
+			opt_voices[1] = "Listing mode: Textlist"
+		else
+			opt_voices[1] = "Listing mode: Ringmenu"
+		end
+	elseif voice_num == 2 then
+		options_menu = not options_menu
+		Graphics.freeImage(preview_info[1].icon)
+		Graphics.freeImage(preview_info[2].icon)
+		Graphics.freeImage(preview_info[3].icon)
+		Graphics.freeImage(icon)
+		Graphics.freeImage(voice)
+		Graphics.freeImage(buttons)
+		CloseMusic()
+		Timer.destroy(konami_delayer)
+		PurgeShuffleTable()
+		if netreceiver then
+			Socket.close(netrecv)
+			if theme_received then
+				Socket.close(client)
+			end
+			Socket.term()
+		end
+		Sound.term()
+		wav:destroy()
+		wav2:destroy()
+		if p ~= nil then
+			Graphics.freeImage(p)
+		end
+		Timer.destroy(delayer)
+		System.exit()
+	end
+end
+function PrintOptionsVoices()
+	Font.setPixelSizes(font, 14)
+	base_y = 30
+	for l, voice in pairs(opt_voices) do
+		if (base_y > 205) then
+			break
+		end
+		x = 5
+		if (l==opt_idx) then
+			Screen.fillRect(0,319,base_y-2,base_y+17,colors[col_idx][1],BOTTOM_SCREEN)
+			x = 10
+		end
+		Font.print(font, x, base_y, voice, Color.new(255, 255, 255), BOTTOM_SCREEN)
+		base_y = base_y + 20
+	end
+end
+konami_todo = true
+version = "2.1 BETA"
 bgm_opening = false
 Graphics.init()
 shuffle_themes = {}
+jump_oldpad = false
 select_shuffle = false
+Sound.init()
+theme_received = false
+netreceiver = false
 install_themes = false
 theme_shuffle = "OFF"
 shuffle_value = 0
@@ -44,6 +145,25 @@ end
 function PrintTopUI()
 	Graphics.fillRect(0, 400, 0, 240, colors[col_idx][2])
 end
+master_index = 0
+function PrintThemesList()
+	Font.setPixelSizes(font, 14)
+	base_y = 30
+	for l, file in pairs(themes_table) do
+		if (base_y > 205) then
+			break
+		end
+		if (l >= master_index) then
+			x = 5
+			if (l==idx) then
+				Screen.fillRect(0,319,base_y-2,base_y+17,colors[col_idx][1],BOTTOM_SCREEN)
+				x = 10
+			end
+			Font.print(font, x, base_y, file.name, Color.new(255, 255, 255), BOTTOM_SCREEN)
+			base_y = base_y + 20
+		end
+	end
+end
 function ReloadValue(p_idx, t_idx)
 	if System.doesFileExist(System.currentDirectory() .. themes_table[t_idx].name .. "/info.smdh") then
 		preview_info[p_idx] =  System.extractSMDH(System.currentDirectory() .. themes_table[t_idx].name .. "/info.smdh")
@@ -62,7 +182,16 @@ function PrintTitle(version_bool)
 	Font.setPixelSizes(font, 16)
 	Font.print(font, 5, 5, "CHMM2 - Theme Manager for Nintendo 3DS", Color.new(255, 255, 255), BOTTOM_SCREEN)
 	if version_bool then
-		Font.print(font, 5, 225, "v."..version, Color.new(255, 255, 255), BOTTOM_SCREEN)
+		if Network.isWifiEnabled() then
+			if Network.getIPAddress() == "247.7.224.216" then
+				ip = "Netrecv error"
+			else
+				ip = "IP: " .. Network.getIPAddress()
+			end
+		else
+			ip = ""
+		end
+		Font.print(font, 5, 225, "v."..version.."                                            "..ip, Color.new(255, 255, 255), BOTTOM_SCREEN)
 	end
 end
 function PrintIconsPreview()
@@ -279,9 +408,9 @@ end
 function LoadPreview()
 	if System.doesFileExist(System.currentDirectory() .. themes_table[idx].name .. "/preview.png") then
 		p = Graphics.loadImage(System.currentDirectory() .. themes_table[idx].name .. "/preview.png")
-	elseif System.currentDirectory() .. themes_table[idx].name .. "/preview.jpg" then
+	elseif System.doesFileExist(System.currentDirectory() .. themes_table[idx].name .. "/preview.jpg") then
 		p = Graphics.loadImage(System.currentDirectory() .. themes_table[idx].name .. "/preview.jpg")
-	elseif System.currentDirectory() .. themes_table[idx].name .. "/preview.bmp" then
+	elseif System.doesFileExist(System.currentDirectory() .. themes_table[idx].name .. "/preview.bmp") then
 		p = Graphics.loadImage(System.currentDirectory() .. themes_table[idx].name .. "/preview.bmp")
 	else
 		p_tmp = Screen.createImage(400,240, Color.new(0,0,0))
@@ -380,7 +509,7 @@ function LoadWave(height,dim,f,style,x_dim)
 			for x = 0,x_dim,4 do
 				y = 100+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				i = self.Amplitud*(-2*self.pi/self.Long_onda)*math.cos(2*self.pi*(t*self.Frec-x/self.Long_onda))
-				Graphics.fillRect(x-200,x+200,math.floor(y-i*200),math.floor(y+i*200),Color.new(self.a,self.b,self.c,math.floor(x/40)))
+				Graphics.drawLine(x-200,x+200,y-i*200,y+i*200,Color.new(self.a,self.b,self.c,math.floor(x/40)))
 			end
 			collectgarbage()
 		end
@@ -419,7 +548,7 @@ function LoadWave(height,dim,f,style,x_dim)
 				y = 120+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				i = self.Amplitud*(-2*self.pi/self.Long_onda)*math.cos(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				for a = -3,3 do
-					Graphics.fillRect(x-20,x+20,math.floor(a+y-i*20),math.floor(a+y+i*20),Color.new(self.a,self.b,self.c,25-math.abs(a*5)))
+					Graphics.drawLine(x-20,x+20,a+y-i*20,a+y+i*20,Color.new(self.a,self.b,self.c,25-math.abs(a*5)))
 				end
 			end
 			collectgarbage()
@@ -444,8 +573,8 @@ function LoadWave(height,dim,f,style,x_dim)
 			local t,x,y,i
 			t = Timer.getTime(self.contador)/1000+desfase
 			for x = 0,x_dim do
-				y = math.floor(200+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda)))
-				Graphics.fillRect(x,x,y,240,self.Color)
+				y = 100+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
+				Graphics.drawLine(x,x,y,240,self.Color)
 			end
 			collectgarbage()
 		end
@@ -458,10 +587,70 @@ end
 themes_table = SortDirectory(System.listDirectory(System.currentDirectory()))
 preview_info = {}
 wav = LoadWave(1,600, 0.1, 2, 400)
-wav2 = LoadWave(10,600, 0.1, 1, 320)
-wav:color(Color.getR(colors[col_idx][1]),Color.getG(colors[col_idx][1]),Color.getB(colors[col_idx][1]))
-wav2:color(Color.getR(colors[col_idx][1]),Color.getG(colors[col_idx][1]),Color.getB(colors[col_idx][1]))
+wav2 = LoadWave(15,600, 0.1, 1, 320)
+wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+if System.doesFileExist("/patch.lua") then
+	dofile("/patch.lua")
+end
 while #themes_table <= 0 do
+	if theme_received then
+		block = Socket.receive(client, 16384)
+		if string.len(block) > 0 then
+			io.write(new_theme, offs, block, string.len(block))
+			offs = offs + string.len(block)
+		else
+			io.close(new_theme)
+			Socket.send(client, "YATA TERM")
+			Socket.close(client)
+			System.extractZIP("/tmp.zip","/tmp")
+			for i,dir in pairs(System.listDirectory("/tmp")) do
+				if dir.directory then
+					System.createDirectory(System.currentDirectory() .. dir.name)
+					filelist = System.listDirectory("/tmp/" .. dir.name)
+					for z, file in pairs(filelist) do
+						System.renameFile("/tmp/" .. dir.name .. "/" .. file.name, System.currentDirectory() .. dir.name .. "/" .. file.name)
+					end
+					System.deleteDirectory("/tmp/" .. dir.name)
+					table.insert(themes_table, dir)
+				end
+			end
+			System.deleteDirectory("/tmp")
+			System.deleteFile("/tmp.zip")
+			Graphics.freeImage(preview_info[1].icon)
+			Graphics.freeImage(preview_info[3].icon)
+			if idx > 1 then
+				ReloadValue(1, idx-1)
+			else
+				ReloadValue(1, #themes_table)
+			end
+			ReloadValue(3, idx+1)
+			theme_received = false
+			client = nil
+		end
+	else
+		if not netreceiver then
+			if Network.isWifiEnabled() then
+				Socket.init()
+				netrecv = Socket.createServerSocket(5000)
+				netreceiver = true
+			end
+		else
+			if not Network.isWifiEnabled() then
+				Socket.close(netrecv)
+				Socket.term()
+				netreceiver = false
+			else
+				client = Socket.accept(netrecv)
+				if client ~= nil then
+					Socket.send(client, "YATA SENDER")
+					new_theme = io.open("/tmp.zip",FCREATE)
+					offs = 0
+					theme_received = true
+				end
+			end
+		end
+	end
 	pad = Controls.read()
 	Screen.refresh()
 	Graphics.initBlend(TOP_SCREEN)
@@ -481,6 +670,8 @@ while #themes_table <= 0 do
 	PrintError()
 	if to_scan then
 		Alert("Scanning SD for themes...", TOP_SCREEN)
+	elseif theme_received then
+		Alert("Receiving a themes packet from network...", TOP_SCREEN)
 	end
 	PrintTitle(true)
 	Screen.flip()
@@ -494,6 +685,14 @@ while #themes_table <= 0 do
 		Graphics.freeImage(buttons)
 		wav:destroy()
 		wav2:destroy()
+		if netreceiver then
+			Socket.close(netrecv)
+			if theme_received then
+				Socket.close(client)
+			end
+			Socket.term()
+		end
+		Sound.term()
 		System.exit()
 	elseif Controls.check(Controls.read(), KEY_B) then
 		to_scan = true
@@ -502,8 +701,8 @@ while #themes_table <= 0 do
 		if col_idx > #colors then
 			col_idx = 1
 		end
-		wav:color(Color.getR(colors[col_idx][1]),Color.getG(colors[col_idx][1]),Color.getB(colors[col_idx][1]))
-		wav2:color(Color.getR(colors[col_idx][1]),Color.getG(colors[col_idx][1]),Color.getB(colors[col_idx][1]))
+		wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+		wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
 	end
 	oldpad = pad
 end
@@ -591,7 +790,67 @@ function PurgeShuffleTable()
 	shuffle_value = 0
 end
 delayer = Timer.new()
+konami_delayer = Timer.new()
 while true do
+	if theme_received then
+		block = Socket.receive(client, 16384)
+		if string.len(block) > 0 then
+			io.write(new_theme, offs, block, string.len(block))
+			offs = offs + string.len(block)
+		else
+			io.close(new_theme)
+			Socket.send(client, "YATA TERM")
+			Socket.close(client)
+			System.extractZIP("/tmp.zip","/tmp")
+			for i,dir in pairs(System.listDirectory("/tmp")) do
+				if dir.directory then
+					System.createDirectory(System.currentDirectory() .. dir.name)
+					filelist = System.listDirectory("/tmp/" .. dir.name)
+					for z, file in pairs(filelist) do
+						System.renameFile("/tmp/" .. dir.name .. "/" .. file.name, System.currentDirectory() .. dir.name .. "/" .. file.name)
+					end
+					System.deleteDirectory("/tmp/" .. dir.name)
+					table.insert(themes_table, dir)
+				end
+			end
+			System.deleteDirectory("/tmp")
+			System.deleteFile("/tmp.zip")
+			Graphics.freeImage(preview_info[1].icon)
+			Graphics.freeImage(preview_info[3].icon)
+			if idx > 1 then
+				ReloadValue(1, idx-1)
+			else
+				ReloadValue(1, #themes_table)
+			end
+			ReloadValue(3, idx+1)
+			theme_received = false
+			client = nil
+		end
+	else
+		if not netreceiver then
+			if Network.isWifiEnabled() then
+				Socket.init()
+				if Network.getIPAddress() ~= "247.7.224.216" then
+					netrecv = Socket.createServerSocket(5000)
+					netreceiver = true
+				end
+			end
+		else
+			if not Network.isWifiEnabled() then
+				Socket.close(netrecv)
+				Socket.term()
+				netreceiver = false
+			else
+				client = Socket.accept(netrecv)
+				if client ~= nil then
+					Socket.send(client, "YATA SENDER")
+					new_theme = io.open("/tmp.zip",FCREATE)
+					offs = 0
+					theme_received = true
+				end
+			end
+		end
+	end
 	if alpha_transf ~= nil then
 		if Timer.getTime(alpha_transf) > 3000 and alpha_idx <= 255  then
 			if Timer.getTime(alpha_transf) > 3000 + 10 * alpha_idx then
@@ -622,20 +881,29 @@ while true do
 	else
 		wav:init()
 		PrintTopUI2()
-		if theme_shuffle == "ON" then
-			PrintPrevButton2()
-			PrintShuffleGrid()
-		else
-			PrintPrevButton()
+		if not options_menu then
+			if theme_shuffle == "ON" then
+				PrintPrevButton2()
+				PrintShuffleGrid()
+			else
+				PrintPrevButton()
+			end
+		end
+		if Network.isWifiEnabled() then
+			Graphics.fillRect(390,395,219,235,Color.new(255, 255, 255))
+			Graphics.fillRect(383,388,225,235,Color.new(255, 255, 255))
+			Graphics.fillRect(376,381,231,235,Color.new(255, 255, 255))
 		end
 	end
 	Graphics.termBlend()
 	Graphics.initBlend(BOTTOM_SCREEN)
 	PrintBottomUI()
 	wav2:init()
-	PrintIconsPreview()
-	PrintInfoUI()
-	if bgm_opening or install_theme or install_themes then
+	if not list_style and not options_menu then
+		PrintIconsPreview()
+		PrintInfoUI()
+	end
+	if bgm_opening or install_theme or install_themes or theme_received then
 		PrintTopUI2()
 	end
 	Graphics.termBlend()
@@ -648,23 +916,36 @@ while true do
 	elseif install_themes then
 		PrintTitle(false)
 		Alert("Installing shuffle themeset...", BOTTOM_SCREEN)
+	elseif theme_received then
+		PrintTitle(false)
+		Alert("Receiving a themes packet from network...", BOTTOM_SCREEN)
 	else
 		PrintTitle(true)
 	end
-	PrintInfo()
+	if not options_menu then
+		if list_style then
+			PrintThemesList()
+		else
+			PrintInfo()
+		end
+	else
+		PrintOptionsVoices()
+	end		
 	if not preview then
 		PrintThemesInfo()
-		if theme_shuffle == "ON" then
-			PrintPreviewText2()
-		else
-			PrintPreviewText()
+		if not options_menu then
+			if theme_shuffle == "ON" then
+				PrintPreviewText2()
+			else
+				PrintPreviewText()
+			end
 		end
 	end
 	Screen.flip()
 	Screen.waitVblankStart()
 	if bgm_opening then
 		Timer.pause(alpha_transf)
-		bgm = Sound.openOgg(System.currentDirectory()..themes_table[p].name.."/BGM.ogg",false)
+		bgm = Sound.openOgg(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg",false)
 		Sound.play(bgm,LOOP,0x08,0x09)
 		Timer.resume(alpha_transf)
 		music = true
@@ -690,39 +971,79 @@ while true do
 			Timer.resume(alpha_transf)
 		end
 	end
-	if Controls.check(pad, KEY_START) then
-		Graphics.freeImage(preview_info[1].icon)
-		Graphics.freeImage(preview_info[2].icon)
-		Graphics.freeImage(preview_info[3].icon)
-		Graphics.freeImage(icon)
-		Graphics.freeImage(voice)
-		Graphics.freeImage(buttons)
-		CloseMusic()
-		PurgeShuffleTable()
-		wav:destroy()
-		wav2:destroy()
-		if p ~= nil then
-			Graphics.freeImage(p)
+	if konami_todo and Controls.check(pad, konami_code[konami_idx]) and not Controls.check(oldpad, konami_code[konami_idx]) then
+		if Controls.check(pad, KEY_B) then
+			pad = KEY_DUP
+			oldpad = KEY_B
+			jump_oldpad = true
+		elseif Controls.check(pad, KEY_A) then
+			pad = KEY_DUP
+			oldpad = KEY_A
+			jump_oldpad = true
 		end
-		Timer.destroy(delayer)
-		System.exit()
-	elseif (Controls.check(pad,KEY_B)) and not (Controls.check(oldpad,KEY_B)) and theme_shuffle == "ON" then
+		konami_idx = konami_idx + 1
+		Timer.reset(konami_delayer)
+		if konami_idx > #konami_code then
+			konami_todo = false
+			wav:destroy()
+			wav = LoadWave(15, 600, 0.1, 3, 400)
+			wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+		end
+	elseif Timer.getTime(konami_delayer) > 500 then
+		konami_idx = 1
+		Timer.reset(konami_delayer)
+	end
+	if Controls.check(pad, KEY_START) and not Controls.check(oldpad, KEY_START) then
+		options_menu = not options_menu
+		if not options_menu then
+			if not list_style then
+				Graphics.freeImage(preview_info[1].icon)
+				Graphics.freeImage(preview_info[2].icon)
+				Graphics.freeImage(preview_info[3].icon)
+				ReloadValue(2, idx)
+				if idx == 1 then
+					o_idx = #themes_table
+				else
+					o_idx = idx - 1
+				end
+				ReloadValue(1, o_idx)
+				if idx == #themes_table then
+					n_idx = 1
+				else
+					n_idx = idx + 1
+				end
+				ReloadValue(3, n_idx)
+			end
+			theme_setting = io.open(System.currentDirectory().."settings.cfg",FCREATE)
+			io.write(theme_setting,0,"col_idx = " .. col_idx .. "\n",11 + string.len(col_idx))
+			if list_style then
+				io.write(theme_setting,11 + string.len(col_idx),"list_style = true\n",18)
+			else
+				io.write(theme_setting,11 + string.len(col_idx),"list_style = false\n",19)
+			end
+			io.close(theme_setting)
+		end
+	elseif (Controls.check(pad,KEY_B)) and not (Controls.check(oldpad,KEY_B)) and theme_shuffle == "ON" and not options_menu then
 		if shuffle_value < #shuffle_themes then
 			Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
 			table.remove(shuffle_themes, shuffle_value + 1)
 		end
 	elseif (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) then
-		if theme_shuffle == "OFF" then
-			install_theme = true
+		if options_menu then
+			OptionExecute(opt_idx)
 		else
-			if shuffle_value == #shuffle_themes then
-				table.insert(shuffle_themes, {themes_table[idx].name, LoadIcon(idx)})
+			if theme_shuffle == "OFF" then
+				install_theme = true
 			else
-				Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
-				shuffle_themes[shuffle_value + 1] = {themes_table[idx].name, LoadIcon(idx)}
+				if shuffle_value == #shuffle_themes then
+					table.insert(shuffle_themes, {themes_table[idx].name, LoadIcon(idx)})
+				else
+					Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
+					shuffle_themes[shuffle_value + 1] = {themes_table[idx].name, LoadIcon(idx)}
+				end
 			end
 		end
-	elseif Controls.check(pad, KEY_Y) and not Controls.check(oldpad, KEY_Y) then
+	elseif Controls.check(pad, KEY_Y) and not Controls.check(oldpad, KEY_Y) and not options_menu then
 		if not preview then
 			alpha1 = 255
 			alpha2 = 0
@@ -739,7 +1060,7 @@ while true do
 			alpha_transf = nil
 		end
 		preview = not preview
-	elseif (Controls.check(pad,KEY_X)) and not (Controls.check(oldpad,KEY_X)) then
+	elseif (Controls.check(pad,KEY_X)) and not (Controls.check(oldpad,KEY_X)) and not options_menu then
 		if theme_shuffle == "ON" then
 			if #shuffle_themes > 1 then
 				install_themes = true
@@ -750,7 +1071,7 @@ while true do
 		else
 			theme_shuffle = "ON"
 		end
-	elseif (Controls.check(pad,KEY_L)) and not (Controls.check(oldpad,KEY_L)) and theme_shuffle == "ON" then
+	elseif (Controls.check(pad,KEY_L)) and not (Controls.check(oldpad,KEY_L)) and theme_shuffle == "ON" and not options_menu then
 		shuffle_value = shuffle_value - 1
 		if shuffle_value < 0 then
 			shuffle_value = #shuffle_themes
@@ -758,17 +1079,13 @@ while true do
 		if shuffle_value > 9 then
 			shuffle_value = 9
 		end
-	elseif (Controls.check(pad,KEY_R)) and not (Controls.check(oldpad,KEY_R)) and theme_shuffle == "ON" then
+	elseif (Controls.check(pad,KEY_R)) and not (Controls.check(oldpad,KEY_R)) and theme_shuffle == "ON" and not options_menu then
 		shuffle_value = shuffle_value + 1
 		if shuffle_value > #shuffle_themes or shuffle_value > 9 then
 			shuffle_value = 0
 		end
-	elseif Controls.check(pad, KEY_DLEFT) and Timer.getTime(delayer) > 200 then
-		idx = idx - 1
+	elseif Controls.check(pad, KEY_DLEFT) and Timer.getTime(delayer) > 200 and not options_menu then
 		CloseMusic()
-		if idx < 1 then
-			idx = #themes_table
-		end
 		if p ~= nil then
 			Graphics.freeImage(p)
 			Timer.destroy(alpha_transf)
@@ -776,14 +1093,29 @@ while true do
 			preview = false
 			p = nil
 		end
-		MoveCursorLeft(idx)
-		Timer.reset(delayer)
-	elseif Controls.check(pad, KEY_DRIGHT) and Timer.getTime(delayer) > 200 then
-		idx = idx + 1
-		CloseMusic()
-		if idx > #themes_table then
-			idx = 1
+		if list_style then
+			idx = idx - 8
+			if idx < 1 then
+				idx = 1
+			end
+		else
+			idx = idx - 1
+			if idx < 1 then
+				idx = #themes_table
+			end
 		end
+		if not list_style then
+			MoveCursorLeft(idx)
+		else
+			if (idx >= 8) then
+				master_index = idx - 7
+			else
+				master_index = 0
+			end
+		end
+		Timer.reset(delayer)
+	elseif Controls.check(pad, KEY_DRIGHT) and Timer.getTime(delayer) > 200 and not options_menu then
+		CloseMusic()
 		if p ~= nil then
 			Graphics.freeImage(p)
 			Timer.destroy(alpha_transf)
@@ -791,18 +1123,100 @@ while true do
 			preview = false
 			p = nil
 		end
-		MoveCursorRight(idx)
+		if list_style then
+			idx = idx + 8
+			if idx > #themes_table then
+				idx = #themes_table
+			end
+		else
+			idx = idx + 1
+			if idx > #themes_table then
+				idx = 1
+			end
+		end
+		if not list_style then
+			MoveCursorRight(idx)
+		else
+			if (idx >= 9) then
+				master_index = idx - 7
+			end
+		end
 		Timer.reset(delayer)
+	elseif Controls.check(pad, KEY_TOUCH) and not Controls.check(oldpad, KEY_TOUCH) then
+		if s_idx == nil then
+			s_idx = 0
+		else
+			s_idx = s_idx + 1
+		end
+		System.takeScreenshot("/CHMM2_"..s_idx..".bmp",false)
 	elseif Controls.check(pad, KEY_SELECT) and not Controls.check(oldpad, KEY_SELECT) then
 		col_idx = col_idx + 1
 		if col_idx > #colors then
 			col_idx = 1
 		end
-		wav:color(Color.getR(colors[col_idx][1]),Color.getG(colors[col_idx][1]),Color.getB(colors[col_idx][1]))
-		wav2:color(Color.getR(colors[col_idx][1]),Color.getG(colors[col_idx][1]),Color.getB(colors[col_idx][1]))
+		wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+		wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
 		theme_setting = io.open(System.currentDirectory().."settings.cfg",FCREATE)
-		io.write(theme_setting,0,"col_idx = " .. col_idx,11)
+		io.write(theme_setting,0,"col_idx = " .. col_idx .. "\n",11 + string.len(col_idx))
+		if list_style then
+			io.write(theme_setting,11 + string.len(col_idx),"list_style = true\n",18)
+		else
+			io.write(theme_setting,11 + string.len(col_idx),"list_style = false\n",19)
+		end
 		io.close(theme_setting)
+	elseif (Controls.check(pad,KEY_DUP)) and Timer.getTime(delayer) > 200 then
+		if options_menu then
+			opt_idx = opt_idx - 1
+			if opt_idx < 1 then
+				opt_idx = #opt_voices
+			end
+		elseif list_style then
+			CloseMusic()
+			if p ~= nil then
+				Graphics.freeImage(p)
+				Timer.destroy(alpha_transf)
+				alpha_transf = nil
+				preview = false
+				p = nil
+			end
+			idx = idx - 1
+			if idx < 1 then
+				idx = #themes_table
+			end
+			if (idx >= 8) then
+				master_index = idx - 7
+			end
+		end
+		Timer.reset(delayer)
+	elseif (Controls.check(pad,KEY_DDOWN)) and Timer.getTime(delayer) > 200 then
+		if options_menu then
+			opt_idx = opt_idx + 1
+			if opt_idx > #opt_voices then
+				opt_idx = 1
+			end
+		elseif list_style then
+			CloseMusic()
+			if p ~= nil then
+				Graphics.freeImage(p)
+				Timer.destroy(alpha_transf)
+				alpha_transf = nil
+				preview = false
+				p = nil
+			end
+			idx = idx + 1
+			if idx > #themes_table then
+				idx = 1
+				master_index = 0
+			end
+			if (idx >= 9) then
+				master_index = idx- 7
+			end
+		end
+		Timer.reset(delayer)
 	end
-	oldpad = pad
+	if not jump_oldpad then
+		oldpad = pad
+	else
+		jump_oldpad = false
+	end
 end
