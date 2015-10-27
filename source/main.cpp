@@ -57,8 +57,8 @@ int main(int argc, char **argv)
 	initCfgu();
 	httpcInit();
 	ptmInit();
-	hidInit(NULL);
-	irrstInit(NULL);
+	hidInit();
+	irrstInit();
 	aptOpenSession();
 	Result ret=APT_SetAppCpuTimeLimit(NULL, 30);
 	aptCloseSession();
