@@ -64,15 +64,16 @@ Result CSND_initialize(u32* sharedMem)
 {
 	Result ret=0;
 
-	if(sharedMem==NULL)sharedMem = (u32*)CSND_SHAREDMEM_DEFAULT;
-	CSND_sharedmem = sharedMem;
+	//if(sharedMem==NULL)sharedMem = (u32*)CSND_SHAREDMEM_DEFAULT;
+	//CSND_sharedmem = sharedMem;
 
 	ret = srvGetServiceHandle(&CSND_handle, "csnd:SND");
 	if(ret!=0)return ret;
 
 	ret = CSND_cmd1(&CSND_mutexhandle, &CSND_sharedmemhandle, CSND_sharedmem_cmdblocksize+0x114, CSND_sharedmem_cmdblocksize, CSND_sharedmem_cmdblocksize+8, CSND_sharedmem_cmdblocksize+0xc8, CSND_sharedmem_cmdblocksize+0xd8);
 	if(ret!=0)return ret;
-
+	
+	CSND_sharedmem = (u32*)mappableAlloc(0x2114);
 	ret = svcMapMemoryBlock(CSND_sharedmemhandle, (u32)CSND_sharedmem, 3, 0x10000000);
 	if(ret!=0)return ret;
 

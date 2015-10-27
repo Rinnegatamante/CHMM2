@@ -43,7 +43,7 @@ APP_DESCRIPTION	:=	Theme Manager for 3DS
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=softfp
+ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard
 
 CFLAGS	:=	-g -O2 -mword-relocations \
 			-fomit-frame-pointer -ffast-math \
@@ -62,7 +62,7 @@ LIBS	:= -lctru -lm -lz
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:= $(LPP_CTRULIB)
+LIBDIRS	:= $(LPP_CTRULIB) $(CURDIR)/source
 
 
 #---------------------------------------------------------------------------------
