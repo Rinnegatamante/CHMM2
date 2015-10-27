@@ -17,33 +17,29 @@ else
 	col_idx = 1
 end
 if System.checkBuild() == 2 then -- Patch to disable broken socketing features on NH2
-	old_funcs = {["init"] = Socket.init,
-				 ["term"] = Socket.term,
-				 ["createServerSocket"] = Socket.createServerSocket,
-				 ["accept"] = Socket.accept,
-				 ["receive"] = Socket.receive,
-				 ["send"] = Socket.send,
-				 ["close"] = Socket.close,
+	old_funcs = {["play"] = Sound.play,
+				 ["close"] = Sound.close,
+				 ["pause"] = Sound.pause,
+				 ["open"] = Sound.openOgg,
+				 ["init"] = Sound.init,
+				 ["term"] = Sound.term,
 				}
-	function Socket.init()
+	function Sound.close(stub)
 		return nil
 	end
-	function Socket.term()
+	function Sound.init()
 		return nil
 	end
-	function Socket.createServerSocket(stub)
+	function Sound.play(stub, stub, stub, stub)
 		return nil
 	end
-	function Socket.accept(stub)
+	function Sound.openOgg(stub, stub)
 		return nil
 	end
-	function Socket.receive(stub, stub)
+	function Sound.pause(stub)
 		return nil
 	end
-	function Socket.send(stub)
-		return nil
-	end
-	function Socket.close(stub)
+	function Sound.term()
 		return nil
 	end
 end
@@ -112,7 +108,7 @@ function PrintOptionsVoices()
 	end
 end
 konami_todo = true
-version = "2.1 BETA"
+version = "2.1.2"
 bgm_opening = false
 Graphics.init()
 shuffle_themes = {}
@@ -273,7 +269,6 @@ function ChangeTheme(theme)
 	elseif reg == 2 then
 		archive = 0x000002ce
 		archive2 = 0x00000098
-
 	else
 		archive = 0x000002cc
 		archive2 = 0x00000082
@@ -332,7 +327,6 @@ function ChangeMultipleTheme(themes)
 	elseif reg == 2 then
 		archive = 0x000002ce
 		archive2 = 0x00000098
-
 	else
 		archive = 0x000002cc
 		archive2 = 0x00000082
