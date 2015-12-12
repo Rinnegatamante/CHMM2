@@ -39,7 +39,6 @@
 #include <3ds.h>
 #include "Graphics.h"
 #include "font.h"
-#define LODEPNG_COMPILE_PNG
 #include "../lodepng/lodepng.h"
 #include "../libjpeg/jpeglib.h"
 #include <setjmp.h>
@@ -51,13 +50,60 @@ u8* TopLFB;
 u8* TopRFB;
 u8* BottomFB;
 
+void putPixel565(u8* dst, u8 x, u8 y, u16 v){
+	dst[(x+(47-y)*48)*3+0]=(v&0x1F)<<3;
+	dst[(x+(47-y)*48)*3+1]=((v>>5)&0x3F)<<2;
+	dst[(x+(47-y)*48)*3+2]=((v>>11)&0x1F)<<3;
+}
+
+Bitmap* decodePNGbuffer(unsigned char* in, u64 size)
+{
+	Bitmap* result;
+	unsigned char* out;
+	unsigned int w, h;
+		
+	if(lodepng_decode32(&out, &w, &h, in, size) != 0) return 0;
+	
+	result = (Bitmap*)malloc(sizeof(Bitmap));
+	if(!result) {
+		free(out);
+	}
+	
+	result->pixels = out;
+	result->width = w;
+	result->height = h;
+	result->bitperpixel = 32;
+	return result;
+}
+
+void DrawRGB565Pixel(u8* dst, u16 x, u16 y, u16 v){
+	u8 b = (v&0x1F)<<3;
+	u8 g =((v>>5)&0x3F)<<2;
+	u8 r = ((v>>11)&0x1F)<<3;
+	u32 color = b | (g << 8) | (r << 16) | (0xFF << 24);
+	DrawPixel(dst,x,y,color);
+}
+
+void DrawRGB565Screen(u8* dst, u16* pic){
+	int x;
+	int y;
+	u16 width = 400;	
+	if (dst == BottomFB) width = 320;
+	for (y=0; y < 240; y++){
+		for (x=0; x < width; x++){
+			DrawRGB565Pixel(dst, x, y, *pic);
+			pic++;
+		}
+	}
+}
+
 Bitmap* LoadBitmap(char* fname){
 	Handle fileHandle;
 	u64 size;
 	u32 bytesRead;
-	FS_path filePath=FS_makePath(PATH_CHAR, fname);
-	FS_archive script=(FS_archive){ARCH_SDMC, (FS_path){PATH_EMPTY, 1, (u8*)""}};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, script, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
+	FS_Path filePath=fsMakePath(PATH_ASCII, fname);
+	FS_Archive script=(FS_Archive){ARCHIVE_SDMC, (FS_Path){PATH_EMPTY, 1, (u8*)""}};
+	FSUSER_OpenFileDirectly( &fileHandle, script, filePath, FS_OPEN_READ, 0x00000000);
 	FSFILE_GetSize(fileHandle, &size);
 	Bitmap* result = (Bitmap*)malloc(sizeof(Bitmap));
 	
@@ -97,6 +143,16 @@ if (result->bitperpixel == 24){
 			}
 			
 		}
+	}
+}
+
+void PrintGpuBitmap(int xp,int yp, Bitmap* result,int screen){
+	int x, y;
+	for (y = 0; y < result->height; y++){
+		for (x = 0; x < result->width; x++){
+			u32 color = *(u32*)&(result->pixels[(x + (result->height - y - 1) * result->width)*4]);
+			sf2d_set_pixel(((gpu_text*)screen)->tex, xp+x, yp+y, color);
+		}		
 	}
 }
 
@@ -191,6 +247,28 @@ void PrintPartialImageBitmap(int xp,int yp,int st_x,int st_y,int width,int heigh
 	}
 }
 
+void PrintPartialGpuBitmap(int xp,int yp,int st_x,int st_y,int width,int height, Bitmap* result,int screen){
+	if(!result)
+		return;
+	int x, y;
+		if (result->bitperpixel == 24){
+			for (y = st_y; y < st_y + height; y++){
+				for (x = st_x; x < st_x + width; x++){
+				u32 color = *(u32*)&(result->pixels[(x + (result->height - y - 1) * result->width)*3]);
+				color = (color & 0x00FFFFFF) | (0xFF << 24);
+				sf2d_set_pixel(((gpu_text*)screen)->tex,xp+x-st_x,yp+y-st_y,color);
+				}
+				}
+		}else{
+		for (y = st_y; y < st_y + height; y++){
+		for (x = st_x; x < st_x + width; x++){
+				u32 color = *(u32*)&(result->pixels[(x + (result->height - y - 1) * result->width)*4]);
+				sf2d_set_pixel(((gpu_text*)screen)->tex,xp+x-st_x,yp+y-st_y,color);
+			}
+		}
+		}
+}
+
 u8* flipBitmap(u8* flip_bitmap, Bitmap* result){
 if(!result)
 	return 0;
@@ -274,9 +352,9 @@ screen->pixels[idx*4+3] = outA * 255.0f;
 }
 
 void RefreshScreen(){
-TopLFB = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
-if (CONFIG_3D_SLIDERSTATE != 0) TopRFB = gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, NULL, NULL);
-BottomFB = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
+	TopLFB = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
+	TopRFB = gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, NULL, NULL);
+	BottomFB = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
 }
 
 void DrawScreenText(int x, int y, char* str, u32 color, int screen,int side){
@@ -470,6 +548,41 @@ x++;
 }
 }
 
+void DrawGpuText(int x, int y, char* str, u32 color, int screen){
+unsigned short* ptr;
+unsigned short glyphsize;
+int i, cx, cy;
+for (i = 0; str[i] != '\0'; i++)
+{
+if (str[i] < 0x21)
+{
+x += 6;
+continue;
+}
+u16 ch = str[i];
+if (ch > 0x7E) ch = 0x7F;
+ptr = &font[(ch-0x20) << 4];
+glyphsize = ptr[0];
+if (!glyphsize)
+{
+x += 6;
+continue;
+}
+x++;
+for (cy = 0; cy < 12; cy++)
+{
+unsigned short val = ptr[4+cy];
+for (cx = 0; cx < glyphsize; cx++)
+{
+if (val & (1 << cx))
+sf2d_set_pixel(((gpu_text*)screen)->tex,x+cx, y+cy, color);
+}
+}
+x += glyphsize;
+x++;
+}
+}
+
 void DebugOutput(char* str){
 unsigned short* ptr;
 unsigned short glyphsize;
@@ -608,6 +721,28 @@ void FillImageRect(int x1,int x2,int y1,int y2,u32 color,int screen){
 	}
 }
 
+void FillGpuRect(int x1,int x2,int y1,int y2,u32 color,int screen){
+	if (x1 > x2){
+	int temp_x = x1;
+	x1 = x2;
+	x2 = temp_x;
+	}
+	if (y1 > y2){
+	int temp_y = y1;
+	y1 = y2;
+	y2 = temp_y;
+	}
+	int base_y = y1;
+	while (x1 <= x2){
+		while (y1 <= y2){
+			sf2d_set_pixel(((gpu_text*)screen)->tex,x1,y1,color);
+			y1++;
+		}
+		y1 = base_y;
+		x1++;
+	}
+}
+
 void FillAlphaImageRect(int x1,int x2,int y1,int y2,u32 color,int screen){
 	if (x1 > x2){
 	int temp_x = x1;
@@ -726,6 +861,30 @@ void FillImageEmptyRect(int x1,int x2,int y1,int y2,u32 color,int screen){
 	while (x1 <= x2){
 		DrawImagePixel(x1,base_y,color,(Bitmap*)screen);
 		DrawImagePixel(x1,y2,color,(Bitmap*)screen);
+		x1++;
+	}
+}
+
+void FillGpuEmptyRect(int x1,int x2,int y1,int y2,u32 color,int screen){
+	if (x1 > x2){
+	int temp_x = x1;
+	x1 = x2;
+	x2 = temp_x;
+	}
+	if (y1 > y2){
+	int temp_y = y1;
+	y1 = y2;
+	y2 = temp_y;
+	}
+	int base_y = y1;
+	while (y1 <= y2){
+			sf2d_set_pixel(((gpu_text*)screen)->tex,x1,y1,color);
+			sf2d_set_pixel(((gpu_text*)screen)->tex,x2,y1,color);
+			y1++;
+		}
+	while (x1 <= x2){
+		sf2d_set_pixel(((gpu_text*)screen)->tex,x1,base_y,color);
+		sf2d_set_pixel(((gpu_text*)screen)->tex,x1,y2,color);
 		x1++;
 	}
 }
@@ -1052,6 +1211,45 @@ void DrawImageLine(int x0, int y0, int x1, int y1, u32 color, int screen)
     }
 }
 
+void DrawGpuLine(int x0, int y0, int x1, int y1, u32 color, int screen)
+{
+    int dy = y1 - y0;
+    int dx = x1 - x0;
+    int stepx, stepy;
+   
+    if (dy < 0) { dy = -dy;  stepy = -1; } else { stepy = 1; }
+    if (dx < 0) { dx = -dx;  stepx = -1; } else { stepx = 1; }
+    dy <<= 1;
+    dx <<= 1;
+   
+    y0 *= 1;
+    y1 *= 1;
+    DrawImagePixel(x0, y0, color, (Bitmap*)screen);
+    if (dx > dy) {
+        int fraction = dy - (dx >> 1);
+        while (x0 != x1) {
+            if (fraction >= 0) {
+                y0 += stepy;
+                fraction -= dx;
+            }
+            x0 += stepx;
+            fraction += dy;
+            sf2d_set_pixel(((gpu_text*)screen)->tex,x0, y0, color);
+        }
+    } else {
+        int fraction = dx - (dy >> 1);
+        while (y0 != y1) {
+            if (fraction >= 0) {
+                x0 += stepx;
+                fraction -= dy;
+            }
+            y0 += stepy;
+            fraction += dx;
+            sf2d_set_pixel(((gpu_text*)screen)->tex,x0, y0, color);
+        }
+    }
+}
+
 Bitmap* loadPng(const char* filename)
 {
 	Handle fileHandle;
@@ -1062,9 +1260,9 @@ Bitmap* loadPng(const char* filename)
 	unsigned char* in;
 	unsigned int w, h;
 	
-	FS_path filePath = FS_makePath(PATH_CHAR, filename);
-	FS_archive archive = (FS_archive) { ARCH_SDMC, (FS_path) { PATH_EMPTY, 1, (u8*)"" }};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, archive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
+	FS_Path filePath = fsMakePath(PATH_ASCII, filename);
+	FS_Archive archive = (FS_Archive) { ARCHIVE_SDMC, (FS_Path) { PATH_EMPTY, 1, (u8*)"" }};
+	FSUSER_OpenFileDirectly( &fileHandle, archive, filePath, FS_OPEN_READ, 0x00000000);
 	
 	FSFILE_GetSize(fileHandle, &size);
 	
@@ -1122,9 +1320,9 @@ Bitmap* decodePNGfile(const char* filename)
 	unsigned char* in;
 	unsigned int w, h;
 	
-	FS_path filePath = FS_makePath(PATH_CHAR, filename);
-	FS_archive archive = (FS_archive) { ARCH_SDMC, (FS_path) { PATH_EMPTY, 1, (u8*)"" }};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, archive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
+	FS_Path filePath = fsMakePath(PATH_ASCII, filename);
+	FS_Archive archive = (FS_Archive) { ARCHIVE_SDMC, (FS_Path) { PATH_EMPTY, 1, (u8*)"" }};
+	FSUSER_OpenFileDirectly( &fileHandle, archive, filePath, FS_OPEN_READ, 0x00000000);
 	
 	FSFILE_GetSize(fileHandle, &size);
 	
@@ -1146,26 +1344,6 @@ Bitmap* decodePNGfile(const char* filename)
 		}
 	
 	free(in);
-	
-	result = (Bitmap*)malloc(sizeof(Bitmap));
-	if(!result) {
-		free(out);
-	}
-	
-	result->pixels = out;
-	result->width = w;
-	result->height = h;
-	result->bitperpixel = 32;
-	return result;
-}
-
-Bitmap* decodePNGbuffer(unsigned char* in, u64 size)
-{
-	Bitmap* result;
-	unsigned char* out;
-	unsigned int w, h;
-		
-	if(lodepng_decode32(&out, &w, &h, in, size) != 0) return 0;
 	
 	result = (Bitmap*)malloc(sizeof(Bitmap));
 	if(!result) {
@@ -1224,9 +1402,9 @@ Bitmap* OpenJPG(const char* filename)
 	cinfo.err = jpeg_std_error(&jerr.pub);
     jerr.pub.error_exit = my_error_exit;
     jpeg_create_decompress(&cinfo);
-	FS_path filePath = FS_makePath(PATH_CHAR, filename);
-	FS_archive archive = (FS_archive) { ARCH_SDMC, (FS_path) { PATH_EMPTY, 1, (u8*)"" }};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, archive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);	
+	FS_Path filePath = fsMakePath(PATH_ASCII, filename);
+	FS_Archive archive = (FS_Archive) { ARCHIVE_SDMC, (FS_Path) { PATH_EMPTY, 1, (u8*)"" }};
+	FSUSER_OpenFileDirectly( &fileHandle, archive, filePath, FS_OPEN_READ, 0x00000000);	
 	FSFILE_GetSize(fileHandle, &size);
 	unsigned char* in = (unsigned char*)malloc(size);
 	if(!in) {
@@ -1275,9 +1453,9 @@ Bitmap* decodeJPGfile(const char* filename)
 	cinfo.err = jpeg_std_error(&jerr.pub);
     jerr.pub.error_exit = my_error_exit;
     jpeg_create_decompress(&cinfo);
-	FS_path filePath = FS_makePath(PATH_CHAR, filename);
-	FS_archive archive = (FS_archive) { ARCH_SDMC, (FS_path) { PATH_EMPTY, 1, (u8*)"" }};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, archive, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);	
+	FS_Path filePath = fsMakePath(PATH_ASCII, filename);
+	FS_Archive archive = (FS_Archive) { ARCHIVE_SDMC, (FS_Path) { PATH_EMPTY, 1, (u8*)"" }};
+	FSUSER_OpenFileDirectly( &fileHandle, archive, filePath, FS_OPEN_READ, 0x00000000);	
 	FSFILE_GetSize(fileHandle, &size);
 	unsigned char* in = (unsigned char*)malloc(size);
 	if(!in) {
@@ -1321,9 +1499,9 @@ Bitmap* decodeBMPfile(const char* fname){
 	Handle fileHandle;
 	u64 size;
 	u32 bytesRead;
-	FS_path filePath=FS_makePath(PATH_CHAR, fname);
-	FS_archive script=(FS_archive){ARCH_SDMC, (FS_path){PATH_EMPTY, 1, (u8*)""}};
-	FSUSER_OpenFileDirectly(NULL, &fileHandle, script, filePath, FS_OPEN_READ, FS_ATTRIBUTE_NONE);
+	FS_Path filePath=fsMakePath(PATH_ASCII, fname);
+	FS_Archive script=(FS_Archive){ARCHIVE_SDMC, (FS_Path){PATH_EMPTY, 1, (u8*)""}};
+	FSUSER_OpenFileDirectly( &fileHandle, script, filePath, FS_OPEN_READ, 0x00000000);
 	FSFILE_GetSize(fileHandle, &size);
 	Bitmap* result = (Bitmap*)malloc(sizeof(Bitmap));
 	
@@ -1382,6 +1560,29 @@ Bitmap* decodeJpg(unsigned char* in,u64 size)
     result->height = height;
     result->pixels = bgr_buffer;
     return result;
+}
+
+void printJpg(unsigned char* in,u64 size, u8* framebuffer)
+{
+    struct jpeg_decompress_struct cinfo;
+	struct my_error_mgr jerr;
+	cinfo.err = jpeg_std_error(&jerr.pub);
+    jerr.pub.error_exit = my_error_exit;
+    jpeg_create_decompress(&cinfo);
+    jpeg_mem_src(&cinfo, in, size);
+    jpeg_read_header(&cinfo, TRUE);
+    jpeg_start_decompress(&cinfo);
+    int width = cinfo.output_width;
+    int height = cinfo.output_height;
+    int row_bytes = width * cinfo.num_components;
+    u8* bgr_buffer = framebuffer;
+    while (cinfo.output_scanline < cinfo.output_height) {
+        u8* buffer_array[1];
+        buffer_array[0] = bgr_buffer + (cinfo.output_scanline) * row_bytes;
+        jpeg_read_scanlines(&cinfo, buffer_array, 1);
+    }
+    jpeg_finish_decompress(&cinfo);
+    jpeg_destroy_decompress(&cinfo);
 }
 
 void saveJpg(char *filename, u32 *pixels, u32 width, u32 height){

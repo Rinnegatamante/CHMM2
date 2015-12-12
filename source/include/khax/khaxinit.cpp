@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <new>
 
 #include "khax.h"
 #include "khaxinternal.h"
@@ -203,6 +204,8 @@ namespace KHAX
 	Result IsNew3DS(bool *answer, u32 kernelVersionAlreadyKnown = 0);
 	// gspwn, meant for reading from or writing to freed buffers.
 	Result GSPwn(void *dest, const void *src, std::size_t size, bool wait = true);
+	// Nuke the data cache with a bunch of bogus reads.
+	Result NukeDataCache();
 	// Given a pointer to a structure that is a member of another structure,
 	// return a pointer to the outer structure.  Inspired by Windows macro.
 	template <typename Outer, typename Inner>
@@ -265,7 +268,7 @@ void *KHAX::VersionData::ConvertLinearUserVAToKernelVA(void *address) const
 	u32 addr = reinterpret_cast<u32>(address);
 
 	// Convert the address to a physical address, since that's how we know the mapping.
-	u32 physical = osConvertVirtToPhys(addr);
+	u32 physical = osConvertVirtToPhys((void*)addr);
 	if (physical == 0)
 	{
 		return nullptr;
@@ -977,7 +980,7 @@ Result KHAX::IsNew3DS(bool *answer, u32 kernelVersionAlreadyKnown)
 		// Check whether the system is a New 3DS.  If this fails, abort, because being wrong would
 		// crash the system.
 		u8 isNew3DS = 0;
-		if (Result error = APT_CheckNew3DS(nullptr, &isNew3DS))
+		if (Result error = APT_CheckNew3DS(&isNew3DS))
 		{
 			*answer = false;
 			return error;
@@ -999,14 +1002,14 @@ Result KHAX::GSPwn(void *dest, const void *src, std::size_t size, bool wait)
 {
 	// Attempt a flush of the source, but ignore the result, since we may have just been asked to
 	// read unmapped memory or something similar.
-	GSPGPU_FlushDataCache(nullptr, static_cast<u8 *>(const_cast<void *>(src)), size);
+	GSPGPU_FlushDataCache(static_cast<u8 *>(const_cast<void *>(src)), size);
 
 	// Invalidate the destination's cache, since we're about to overwrite it.  Likewise, ignore
 	// errors, since it may be the destination that is an unmapped address.
-	GSPGPU_InvalidateDataCache(nullptr, static_cast<u8 *>(dest), size);
+	GSPGPU_InvalidateDataCache(static_cast<u8 *>(dest), size);
 
 	// Copy that floppy.
-	if (Result result = GX_SetTextureCopy(nullptr, static_cast<u32 *>(const_cast<void *>(src)), 0,
+	if (Result result = GX_TextureCopy(static_cast<u32 *>(const_cast<void *>(src)), 0,
 		static_cast<u32 *>(dest), 0, size, 8))
 	{
 		KHAX_printf("gspwn:copy fail:%08lx\n", result);
@@ -1018,6 +1021,39 @@ Result KHAX::GSPwn(void *dest, const void *src, std::size_t size, bool wait)
 	{
 		gspWaitForPPF();
 	}
+
+	// Nuke the data cache.
+	if (Result result = NukeDataCache())
+	{
+		KHAX_printf("gspwn:NukeDataCache fail %08lx\n", result);
+		return result;
+	}
+
+	return 0;
+}
+
+//------------------------------------------------------------------------------------------------
+// Flush the entire CPU data cache by nuking it from orbit.  This is a hack, but the system
+// call svcInvalidateDataCache is probably not accessible to us.
+Result KHAX::NukeDataCache()
+{
+	// Allocate a 2 MB dummy buffer.
+	enum : unsigned { DUMMY_ALLOC_SIZE = 2 * 1024 * 1024 };
+
+	u32 *dummyMemory = new(std::nothrow) u32[DUMMY_ALLOC_SIZE / sizeof(*dummyMemory)];
+	if (!dummyMemory)
+	{
+		return MakeError(26, 3, KHAX_MODULE, 1011);
+	}
+
+	// Read from each dword of the buffer in order to force everything else
+	// out of the data cache.
+	volatile u32 *volatileMemory = dummyMemory;
+	for (unsigned x = 0; x < DUMMY_ALLOC_SIZE / sizeof(*dummyMemory); ++x)
+		static_cast<void>(*volatileMemory++);
+
+	// Free the dummy buffer.
+	delete[] dummyMemory;
 
 	return 0;
 }

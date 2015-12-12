@@ -46,7 +46,12 @@ char cur_dir[256];
 char start_dir[256];
 bool CIA_MODE;
 bool is3DSX;
+bool ftp_state;
 bool isNinjhax2;
+bool csndAccess;
+bool isTopLCDOn;
+bool isBottomLCDOn;
+extern bool audioChannels[32];
 
 int main(int argc, char **argv)
 {
@@ -54,13 +59,13 @@ int main(int argc, char **argv)
 	aptInit();
 	gfxInitDefault();
 	acInit();
-	initCfgu();
+	cfguInit();
 	httpcInit();
-	ptmInit();
+	ptmuInit();
 	hidInit();
 	irrstInit();
 	aptOpenSession();
-	Result ret=APT_SetAppCpuTimeLimit(NULL, 30);
+	Result ret=APT_SetAppCpuTimeLimit(30);
 	aptCloseSession();
 	fsInit();
 	Handle fileHandle;
@@ -80,6 +85,16 @@ int main(int argc, char **argv)
 	if (!hbInit()) khaxInit();
 	else isNinjhax2 = true;
 	
+	// Select Audio System (Forcing dsp::DSP)
+	csndAccess = false;
+	
+	// Init Audio-Device
+	int i = 0;
+	for (i=0;i < 32; i++){
+		audioChannels[i] = false;
+		if (!isNinjhax2 && (i < 0x08))  audioChannels[i] = true;
+		else if (csndAccess && (i < 0x08)) audioChannels[i] = true;
+	}
 	
 	while(aptMainLoop())
 	{
@@ -109,7 +124,7 @@ int main(int argc, char **argv)
 			if (strstr(errMsg, "lpp_exit_04")) break;
 			
 		}
-		bool ftp_state = false;
+		ftp_state = false;
 		int connfd;
 		while (restore==0){
 			gspWaitForVBlank();
@@ -141,7 +156,7 @@ int main(int argc, char **argv)
 			}else if(hidKeysDown() & KEY_Y){
 				if (!ftp_state){
 					u32 wifiStatus;
-					if ((u32)ACU_GetWifiStatus(NULL, &wifiStatus) !=  0xE0A09D2E){
+					if ((u32)ACU_GetWifiStatus(&wifiStatus) !=  0xE0A09D2E){
 						if (wifiStatus != 0){
 							ftp_init();
 							connfd = -1;
@@ -156,7 +171,7 @@ int main(int argc, char **argv)
 		}
 		if (ftp_state) ftp_exit();
 		if (isCSND){
-			CSND_shutdown();
+			ndspExit();
 			isCSND = false;
 		}
 		if (restore==2){
@@ -167,11 +182,11 @@ int main(int argc, char **argv)
 	fsExit();
 	irrstExit();
 	hidExit();
-	ptmExit();
+	ptmuExit();
 	hbExit();
 	acExit();
 	httpcExit();
-	exitCfgu();
+	cfguExit();
 	gfxExit();
 	aptExit();
 	srvExit();

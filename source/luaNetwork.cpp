@@ -44,18 +44,21 @@
 #include "include/luaplayer.h"
 #include "include/ftp/ftp.h"
 
+extern bool ftp_state;
 static int connfd;
 typedef struct
 {
 	u32 magic;
-	u32 sock;
+	int sock;
 	struct sockaddr_in addrTo;
 	bool serverSocket;
 } Socket;
 
 static int lua_checkFTPcommand(lua_State *L){
 	int argc = lua_gettop(L);
-    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+    #ifndef SKIP_ERROR_HANDLING
+		if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#endif
 	if(connfd<0)connfd=ftp_getConnection();
 		else{
 			int ret=ftp_frame(connfd);
@@ -71,16 +74,20 @@ static int lua_checkFTPcommand(lua_State *L){
 
 static int lua_wifistat(lua_State *L){
 	int argc = lua_gettop(L);
-	if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#endif
 	u32 wifiStatus;
-	if (ACU_GetWifiStatus(NULL, &wifiStatus) ==  0xE0A09D2E) lua_pushboolean(L,false);
+	if (ACU_GetWifiStatus( &wifiStatus) ==  0xE0A09D2E) lua_pushboolean(L,false);
 	else lua_pushboolean(L,wifiStatus);
 	return 1;
 }
 
 static int lua_macaddr(lua_State *L){
 	int argc = lua_gettop(L);
-	if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#endif
 	u8* mac_byte = (u8*)0x1FF81060; 
 	char mac_address[18];
 	sprintf(mac_address,"%02X:%02X:%02X:%02X:%02X:%02X",*mac_byte,*(mac_byte+1),*(mac_byte+2),*(mac_byte+3),*(mac_byte+4),*(mac_byte+5));
@@ -101,12 +108,16 @@ static int lua_ipaddr(lua_State *L){
 
 static int lua_download(lua_State *L){
 	int argc = lua_gettop(L);
-	if (argc != 2) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 2) return luaL_error(L, "wrong number of arguments");
+	#endif
 	const char* url = luaL_checkstring(L,1);
 	const char* file = luaL_checkstring(L,2);
 	httpcContext context;
 	Result ret = httpcOpenContext(&context, (char*)url , 0);
-	if(ret==0){
+	#ifndef SKIP_ERROR_HANDLING
+		if(ret==0){
+	#endif
 		httpcBeginRequest(&context);
 		/*httpcReqStatus loading;
 		httpcGetRequestState(&context, &loading);
@@ -116,32 +127,40 @@ static int lua_download(lua_State *L){
 		u32 statuscode=0;
 		u32 contentsize=0;
 		httpcGetResponseStatusCode(&context, &statuscode, 0);
-		if (statuscode != 200) luaL_error(L, "download request error");
+		#ifndef SKIP_ERROR_HANDLING
+			if (statuscode != 200) luaL_error(L, "download request error");
+		#endif
 		httpcGetDownloadSizeState(&context, NULL, &contentsize);
 		u8* buf = (u8*)malloc(contentsize);
 		memset(buf, 0, contentsize);
 		httpcDownloadData(&context, buf, contentsize, NULL);
 		Handle fileHandle;
 		u32 bytesWritten;
-		FS_archive sdmcArchive=(FS_archive){ARCH_SDMC, (FS_path){PATH_EMPTY, 1, (u8*)""}};
-		FS_path filePath=FS_makePath(PATH_CHAR, file);
-		FSUSER_OpenFileDirectly(NULL, &fileHandle, sdmcArchive, filePath, FS_OPEN_CREATE|FS_OPEN_WRITE, FS_ATTRIBUTE_NONE);
+		FS_Archive sdmcArchive=(FS_Archive){ARCHIVE_SDMC, (FS_Path){PATH_EMPTY, 1, (u8*)""}};
+		FS_Path filePath=fsMakePath(PATH_ASCII, file);
+		FSUSER_OpenFileDirectly( &fileHandle, sdmcArchive, filePath, FS_OPEN_CREATE|FS_OPEN_WRITE, 0x00000000);
 		FSFILE_Write(fileHandle, &bytesWritten, 0, buf, contentsize,0x10001);
 		FSFILE_Close(fileHandle);
 		svcCloseHandle(fileHandle);
 		free(buf);
-	}else luaL_error(L, "error opening url");
+	#ifndef SKIP_ERROR_HANDLING
+		}else luaL_error(L, "error opening url");
+	#endif
 	httpcCloseContext(&context);
 	return 0;
 }
 
 static int lua_downstring(lua_State *L){
 	int argc = lua_gettop(L);
-	if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	#endif
 	const char* url = luaL_checkstring(L,1);
 	httpcContext context;
 	Result ret = httpcOpenContext(&context, (char*)url , 0);
-	if(ret==0){
+	#ifndef SKIP_ERROR_HANDLING
+		if(ret==0){
+	#endif
 		httpcBeginRequest(&context);
 		/*httpcReqStatus loading;
 		httpcGetRequestState(&context, &loading);
@@ -160,7 +179,9 @@ static int lua_downstring(lua_State *L){
 		buffer[contentsize] = 0;
 		lua_pushlstring(L,(const char*)buffer,contentsize);
 		free(buffer);
-	}else luaL_error(L, "error opening url");
+	#ifndef SKIP_ERROR_HANDLING
+		}else luaL_error(L, "error opening url");
+	#endif
 	httpcCloseContext(&context);
 	return 1;
 }
@@ -176,7 +197,9 @@ static int SpaceCounter(char* string){
 
 static int lua_sendmail(lua_State *L){ //BETA func
 	int argc = lua_gettop(L);
-	if (argc != 3) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 3) return luaL_error(L, "wrong number of arguments");
+	#endif
 	char* to = (char*)luaL_checkstring(L,1);
 	char* subj = (char*)luaL_checkstring(L,2);
 	char* mex = (char*)luaL_checkstring(L,3);
@@ -218,11 +241,13 @@ static int lua_sendmail(lua_State *L){ //BETA func
 	url_p[0] = 0;
 	httpcContext context;
 	Result ret = httpcOpenContext(&context, (char*)url , 0);
-	if(ret==0){
+	#ifndef SKIP_ERROR_HANDLING
+		if(ret==0){
+	#endif
 		httpcBeginRequest(&context);
-		httpcReqStatus loading;
+		HTTPC_RequestStatus loading;
 		httpcGetRequestState(&context, &loading);
-		while (loading == 0x5){
+		while (loading == HTTPC_STATUS_REQUEST_IN_PROGRESS){
 			httpcGetRequestState(&context, &loading);
 		}
 		u32 statuscode=0;
@@ -234,14 +259,18 @@ static int lua_sendmail(lua_State *L){ //BETA func
 		httpcDownloadData(&context, &response, contentsize, NULL);
 		lua_pushboolean(L,response);
 		free(url);
-	}else luaL_error(L, "error opening url");
+	#ifndef SKIP_ERROR_HANDLING
+		}else luaL_error(L, "error opening url");
+	#endif
 	httpcCloseContext(&context);
 	return 1;
 }
 
 static int lua_wifilevel(lua_State *L){
 	int argc = lua_gettop(L);
-    if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#endif
 	u8* wifi_link = (u8*)0x1FF81066;
 	lua_pushinteger(L,*wifi_link);
 	return 1;
@@ -250,8 +279,11 @@ static int lua_wifilevel(lua_State *L){
 static int lua_initSock(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#endif
 	ftp_init();
+	ftp_state = true;
 	sprintf(shared_ftp,"Waiting for connection...");
 	connfd = -1;
 	return 0;
@@ -260,33 +292,34 @@ static int lua_initSock(lua_State *L)
 static int lua_createServerSocket(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 1) 
-	return luaL_error(L, "Socket.createServerSocket(port) takes one argument.");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 1) return luaL_error(L, "Socket.createServerSocket(port) takes one argument.");
+	#endif
 	int port = luaL_checkinteger(L, 1);
 
 	Socket* my_socket = (Socket*) malloc(sizeof(Socket));
 	my_socket->serverSocket = true;
 
 	my_socket->sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (my_socket->sock <= 0) {
-		return luaL_error(L, "invalid socket.");
-	}
+	#ifndef SKIP_ERROR_HANDLING
+		if (my_socket->sock <= 0) return luaL_error(L, "invalid socket.");
+	#endif
 
 	my_socket->addrTo.sin_family = AF_INET;
 	my_socket->addrTo.sin_port = htons(port);
 	my_socket->addrTo.sin_addr.s_addr = 0;
 
 	int err = bind(my_socket->sock, (struct sockaddr*)&my_socket->addrTo, sizeof(my_socket->addrTo));
-	if (err != 0) {
-		return luaL_error(L, "bind error.");
-	}
+	#ifndef SKIP_ERROR_HANDLING
+		if (err != 0) return luaL_error(L, "bind error.");
+	#endif
 
 	fcntl(my_socket->sock, F_SETFL, O_NONBLOCK);
 
 	err = listen(my_socket->sock, 1);
-	if (err != 0) {
-		return luaL_error(L, "listen error.");
-	}
+	#ifndef SKIP_ERROR_HANDLING
+		if (err != 0) return luaL_error(L, "listen error.");
+	#endif
 	
 	my_socket->magic = 0xDEADDEAD;
 	lua_pushinteger(L,(u32)my_socket);
@@ -296,23 +329,28 @@ static int lua_createServerSocket(lua_State *L)
 static int lua_shutSock(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 0) return luaL_error(L, "wrong number of arguments");
+	#endif
 	ftp_exit();
+	ftp_state = false;
 	return 0;
 }
 
 static int lua_recv(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 2) return luaL_error(L, "wrong number of arguments");
-
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 2) return luaL_error(L, "wrong number of arguments");
+	#endif
+	
 	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
 	u32 size = luaL_checkinteger(L, 2);
 	
 	#ifndef SKIP_ERROR_HANDLING
-		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");			
+		if (my_socket->serverSocket) return luaL_error(L, "recv not allowed for server sockets.");
 	#endif
-	if (my_socket->serverSocket) return luaL_error(L, "recv not allowed for server sockets.");
 
 	char* data = (char*)malloc(size);
 	int count = recv(my_socket->sock, data, size, 0);
@@ -324,17 +362,19 @@ static int lua_recv(lua_State *L)
 static int lua_send(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 2) return luaL_error(L, "wrong number of arguments");
-
+	#ifndef SKIP_ERROR_HANDLING	
+		if (argc != 2) return luaL_error(L, "wrong number of arguments");
+	#endif
+	
 	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
 	size_t size;
 	char* text = (char*)luaL_checklstring(L, 2, &size);
 
 	#ifndef SKIP_ERROR_HANDLING
 		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+		if (my_socket->serverSocket) return luaL_error(L, "send not allowed for server sockets.");
+		if (!text) return luaL_error(L, "Socket.send() expected a string.");
 	#endif
-	if (my_socket->serverSocket) return luaL_error(L, "send not allowed for server sockets.");
-	if (!text) return luaL_error(L, "Socket.send() expected a string.");
 	
 	int result = sendto(my_socket->sock, text, size, 0, NULL, 0);
 	lua_pushinteger(L, result);
@@ -344,8 +384,10 @@ static int lua_send(lua_State *L)
 static int lua_connect(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 2) return luaL_error(L, "wrong number of arguments");
-
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 2) return luaL_error(L, "wrong number of arguments");
+	#endif
+	
 	Socket* my_socket = (Socket*) malloc(sizeof(Socket));
 	my_socket->serverSocket = false;
 	my_socket->magic = 0xDEADDEAD;
@@ -357,11 +399,15 @@ static int lua_connect(lua_State *L)
 	my_socket->addrTo.sin_addr.s_addr = inet_addr(host);
 
 	my_socket->sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (my_socket->sock < 0) return luaL_error(L, "Failed creating socket.");
+	#ifndef SKIP_ERROR_HANDLING
+		if (my_socket->sock < 0) return luaL_error(L, "Failed creating socket.");
+	#endif
 	fcntl(my_socket->sock, F_SETFL, O_NONBLOCK);
 
 	int err = connect(my_socket->sock, (struct sockaddr*)&my_socket->addrTo, sizeof(my_socket->addrTo));
-	if (err < 0 ) return luaL_error(L, "Failed connecting server.");
+	#ifndef SKIP_ERROR_HANDLING
+		if (err < 0 ) return luaL_error(L, "Failed connecting server.");
+	#endif
 	
 	lua_pushinteger(L, (u32)my_socket);
 	return 1;
@@ -370,19 +416,23 @@ static int lua_connect(lua_State *L)
 static int lua_accept(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 1) return luaL_error(L, "wrong number of arguments");
-
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 1) return luaL_error(L, "wrong number of arguments");
+	#endif
+	
 	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
 	
 	#ifndef SKIP_ERROR_HANDLING
 		if (my_socket->magic != 0xDEADDEAD) return luaL_error(L, "attempt to access wrong memory block type");
+		if (!my_socket->serverSocket) return luaL_error(L, "accept allowed for server sockets only.");
 	#endif
-	if (!my_socket->serverSocket) return luaL_error(L, "accept allowed for server sockets only.");
 
 	struct sockaddr_in addrAccept;
 	socklen_t cbAddrAccept = sizeof(addrAccept);
 	int sockClient = accept(my_socket->sock, (struct sockaddr*)&addrAccept, &cbAddrAccept);
-	if (sockClient <= 0) return 0;
+	if (sockClient <= 0) {
+		return 0;
+	}
 
 	Socket* incomingSocket = (Socket*) malloc(sizeof(Socket));
 	incomingSocket->serverSocket = 0;
@@ -396,8 +446,10 @@ static int lua_accept(lua_State *L)
 static int lua_closeSock(lua_State *L)
 {
 	int argc = lua_gettop(L);
-	if (argc != 1) return luaL_error(L, "Socket.close() takes one argument.");
-
+	#ifndef SKIP_ERROR_HANDLING
+		if (argc != 1) return luaL_error(L, "Socket.close() takes one argument.");
+	#endif
+	
 	Socket* my_socket = (Socket*)luaL_checkinteger(L, 1);
 	
 	#ifndef SKIP_ERROR_HANDLING
