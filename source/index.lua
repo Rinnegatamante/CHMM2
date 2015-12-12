@@ -5,7 +5,7 @@ colors = {
 		{Color.new(255,0,0), Color.new(255,72,72), Color.new(255,0,0)}, 	  -- Red
 		{Color.new(255,72,255), Color.new(255,185,255), Color.new(255,72,255)},	-- Magenta
 		{Color.new(72,72,72), Color.new(0,0,0), Color.new(0,255,0)}	-- Black'N'Green
-		}
+}
 if System.currentDirectory() == "/" then
 	System.currentDirectory("/Themes/")
 else
@@ -16,54 +16,48 @@ if System.doesFileExist(System.currentDirectory().."settings.cfg") then
 else
 	col_idx = 1
 end
-if System.checkBuild() == 2 then -- Patch to disable broken socketing features on NH2
-	old_funcs = {["play"] = Sound.play,
-				 ["close"] = Sound.close,
-				 ["pause"] = Sound.pause,
-				 ["open"] = Sound.openOgg,
-				 ["init"] = Sound.init,
-				 ["term"] = Sound.term,
-				}
-	function Sound.close(stub)
-		return nil
-	end
-	function Sound.init()
-		return nil
-	end
-	function Sound.play(stub, stub, stub, stub)
-		return nil
-	end
-	function Sound.openOgg(stub, stub)
-		return nil
-	end
-	function Sound.pause(stub)
-		return nil
-	end
-	function Sound.term()
-		return nil
-	end
-end
+oldpad = KEY_A
 konami_code = {KEY_DUP, KEY_DUP, KEY_DDOWN, KEY_DDOWN, KEY_DLEFT, KEY_DRIGHT, KEY_DLEFT, KEY_DRIGHT, KEY_B, KEY_A}
 konami_idx = 1
 opt_idx = 1
+desc_i = 0
+desc_timer = Timer.new()
+Timer.pause(desc_timer)
 if list_style == nil then
 	list_style = false
 end
-options_menu = false
-if list_style then
-	opt_voices = {"Listing mode: Textlist", "Exit CHMM2"}
-else
-	opt_voices = {"Listing mode: Ringmenu", "Exit CHMM2"}
+if bgm_preview == nil then
+	bgm_preview = true
 end
+options_menu = false
+opt_voices = {}
+if list_style then
+	table.insert(opt_voices, "Listing mode: Textlist")
+else
+	table.insert(opt_voices, "Listing mode: Ringmenu")
+end
+if bgm_preview then
+	table.insert(opt_voices, "BGM Preview: On")
+else
+	table.insert(opt_voices, "BGM Preview: Off")
+end
+table.insert(opt_voices,"Exit CHMM2")
 function OptionExecute(voice_num)
 	if voice_num == 1 then
 		list_style = not list_style
 		if list_style then
-			opt_voices[1] = "Listing mode: Textlist"
+			opt_voices[voice_num] = "Listing mode: Textlist"
 		else
-			opt_voices[1] = "Listing mode: Ringmenu"
+			opt_voices[voice_num] = "Listing mode: Ringmenu"
 		end
 	elseif voice_num == 2 then
+		bgm_preview = not bgm_preview
+		if bgm_preview then
+			opt_voices[voice_num] = "BGM Preview: On"
+		else
+			opt_voices[voice_num] = "BGM Preview: Off"
+		end
+	elseif voice_num == 3 then
 		options_menu = not options_menu
 		Graphics.freeImage(preview_info[1].icon)
 		Graphics.freeImage(preview_info[2].icon)
@@ -108,7 +102,7 @@ function PrintOptionsVoices()
 	end
 end
 konami_todo = true
-version = "2.1.2"
+version = "2.2"
 bgm_opening = false
 Graphics.init()
 shuffle_themes = {}
@@ -206,11 +200,32 @@ end
 function PrintInfoUI()
 	Graphics.drawImage(10, 150, voice)
 end
+function DescriptionPrint()
+	len = string.len(preview_info[2].desc) - 45
+	if desc_i == 0 or desc_i >= len then
+		if desc_i == 0 and Timer.getTime(desc_timer) > 2000 then
+			desc_i = 1
+			Timer.reset(desc_timer)
+		elseif desc_i >= len and Timer.getTime(desc_timer) > 2000 then
+			desc_i = 0
+			Timer.reset(desc_timer)
+		end
+	else
+		desc_i = desc_i + 1
+		Timer.reset(desc_timer)
+	end
+	Font.print(font, 17, 189, string.sub(preview_info[2].desc,desc_i,45+desc_i), Color.new(0, 0, 0), BOTTOM_SCREEN)
+end
 function PrintInfo()
 	Font.setPixelSizes(font, 20)
 	Font.print(font, 17, 157, preview_info[2].title, colors[col_idx][1], BOTTOM_SCREEN)
 	Font.setPixelSizes(font, 16)
-	Font.print(font, 17, 189, preview_info[2].desc, Color.new(0, 0, 0), BOTTOM_SCREEN)
+	if string.len(preview_info[2].desc) > 40 then
+		Timer.resume(desc_timer)
+		DescriptionPrint()
+	else
+		Font.print(font, 17, 189, preview_info[2].desc, Color.new(0, 0, 0), BOTTOM_SCREEN)
+	end
 	Font.setPixelSizes(font, 12)
 	Font.print(font, 17, 175, "By " .. preview_info[2].author, colors[col_idx][1], BOTTOM_SCREEN)
 end
@@ -940,7 +955,7 @@ while true do
 	if bgm_opening then
 		Timer.pause(alpha_transf)
 		bgm = Sound.openOgg(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg",false)
-		Sound.play(bgm,LOOP,0x08,0x09)
+		Sound.play(bgm,LOOP)
 		Timer.resume(alpha_transf)
 		music = true
 		bgm_opening = false
@@ -1009,11 +1024,20 @@ while true do
 				ReloadValue(3, n_idx)
 			end
 			theme_setting = io.open(System.currentDirectory().."settings.cfg",FCREATE)
-			io.write(theme_setting,0,"col_idx = " .. col_idx .. "\n",11 + string.len(col_idx))
+			offs = 0
+			io.write(theme_setting,offs,"col_idx = " .. col_idx .. "\n",11 + string.len(col_idx))
+			offs = 11 + string.len(col_idx)
 			if list_style then
-				io.write(theme_setting,11 + string.len(col_idx),"list_style = true\n",18)
+				io.write(theme_setting,offs,"list_style = true\n",18)
+				offs = offs + 18
 			else
-				io.write(theme_setting,11 + string.len(col_idx),"list_style = false\n",19)
+				io.write(theme_setting,offs,"list_style = false\n",19)
+				offs = offs + 19
+			end
+			if bgm_preview then
+				io.write(theme_setting,offs,"bgm_preview = true\n",19)
+			else
+				io.write(theme_setting,offs,"bgm_preview = false\n",20)
 			end
 			io.close(theme_setting)
 		end
@@ -1043,7 +1067,7 @@ while true do
 			alpha2 = 0
 			alpha_transf = Timer.new()
 			alpha_idx = 1
-			if System.doesFileExist(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg") and not music then
+			if System.doesFileExist(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg") and not music and bgm_preview then
 				bgm_opening = true
 			end
 		else
@@ -1078,8 +1102,10 @@ while true do
 		if shuffle_value > #shuffle_themes or shuffle_value > 9 then
 			shuffle_value = 0
 		end
-	elseif Controls.check(pad, KEY_DLEFT) and Timer.getTime(delayer) > 200 and not options_menu then
+	elseif Controls.check(pad, KEY_DLEFT) and Timer.getTime(delayer) > 200 and (not options_menu) then
 		CloseMusic()
+		Timer.pause(desc_timer)
+		Timer.reset(desc_timer)
 		if p ~= nil then
 			Graphics.freeImage(p)
 			Timer.destroy(alpha_transf)
@@ -1108,8 +1134,10 @@ while true do
 			end
 		end
 		Timer.reset(delayer)
-	elseif Controls.check(pad, KEY_DRIGHT) and Timer.getTime(delayer) > 200 and not options_menu then
+	elseif Controls.check(pad, KEY_DRIGHT) and Timer.getTime(delayer) > 200 and (not options_menu) then
 		CloseMusic()
+		Timer.pause(desc_timer)
+		Timer.reset(desc_timer)
 		if p ~= nil then
 			Graphics.freeImage(p)
 			Timer.destroy(alpha_transf)
@@ -1189,6 +1217,9 @@ while true do
 				opt_idx = 1
 			end
 		elseif list_style then
+			desc_i = 1
+			Timer.pause(desc_timer)
+			Timer.reset(desc_timer)
 			CloseMusic()
 			if p ~= nil then
 				Graphics.freeImage(p)
