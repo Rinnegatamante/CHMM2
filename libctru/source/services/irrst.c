@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <3ds/types.h>
+#include <3ds/result.h>
 #include <3ds/svc.h>
 #include <3ds/srv.h>
-#include <3ds/mappable.h>
+#include <3ds/allocator/mappable.h>
+#include <3ds/synchronization.h>
 #include <3ds/services/irrst.h>
-
-// used to determine whether or not we should do IRRST_Initialize
-Handle __get_handle_from_list(char* name);
+#include <3ds/ipc.h>
+#include <3ds/env.h>
 
 Handle irrstHandle;
 Handle irrstMemHandle;
@@ -20,22 +21,22 @@ vu32* irrstSharedMem;
 
 static u32 kHeld;
 static circlePosition csPos;
-static bool irrstUsed = false;
+static int irrstRefCount;
 
-Result irrstInit()
+Result irrstInit(void)
 {
-	if(irrstUsed)return 0;
+	if (AtomicPostIncrement(&irrstRefCount)) return 0;
 
 	Result ret=0;
 
 	// Request service.
-	if((ret=srvGetServiceHandle(&irrstHandle, "ir:rst")))return ret;
+	if(R_FAILED(ret=srvGetServiceHandle(&irrstHandle, "ir:rst"))) goto cleanup0;
 
 	// Get sharedmem handle.
-	if((ret=IRRST_GetHandles(&irrstMemHandle, &irrstEvent))) goto cleanup1;
+	if(R_FAILED(ret=IRRST_GetHandles(&irrstMemHandle, &irrstEvent))) goto cleanup1;
 
 	// Initialize ir:rst
-	if(__get_handle_from_list("ir:rst")==0)ret=IRRST_Initialize(10, 0);
+	if(envGetHandle("ir:rst") == 0) ret = IRRST_Initialize(10, 0);
 
 	// Map ir:rst shared memory.
 	irrstSharedMem=(vu32*)mappableAlloc(0x98);
@@ -45,10 +46,9 @@ Result irrstInit()
 		goto cleanup1;
 	}
 
-	if((ret=svcMapMemoryBlock(irrstMemHandle, (u32)irrstSharedMem, MEMPERM_READ, 0x10000000)))goto cleanup2;
+	if(R_FAILED(ret = svcMapMemoryBlock(irrstMemHandle, (u32)irrstSharedMem, MEMPERM_READ, 0x10000000))) goto cleanup2;
 
 	// Reset internal state.
-	irrstUsed = true;
 	kHeld = 0;
 	return 0;
 
@@ -61,18 +61,19 @@ cleanup2:
 	}
 cleanup1:
 	svcCloseHandle(irrstHandle);
+cleanup0:
+	AtomicDecrement(&irrstRefCount);
 	return ret;
 }
 
-void irrstExit()
+void irrstExit(void)
 {
-	if(!irrstUsed)return;
+	if (AtomicDecrement(&irrstRefCount)) return;
 
-	irrstUsed = false;
 	svcCloseHandle(irrstEvent);
 	// Unmap ir:rst sharedmem and close handles.
 	svcUnmapMemoryBlock(irrstMemHandle, (u32)irrstSharedMem);
-	if(__get_handle_from_list("ir:rst")==0) IRRST_Shutdown();
+	if(envGetHandle("ir:rst") == 0) IRRST_Shutdown();
 	svcCloseHandle(irrstMemHandle);
 	svcCloseHandle(irrstHandle);
 
@@ -105,9 +106,9 @@ u32 irrstCheckSectionUpdateTime(vu32 *sharedmem_section, u32 id)
 	return 0;
 }
 
-void irrstScanInput()
+void irrstScanInput(void)
 {
-	if(!irrstUsed)return;
+	if(irrstRefCount==0)return;
 	
 	u32 Id=0;
 	kHeld = 0;
@@ -122,9 +123,9 @@ void irrstScanInput()
 	}
 }
 
-u32 irrstKeysHeld()
+u32 irrstKeysHeld(void)
 {
-	if(irrstUsed)return kHeld;
+	if(irrstRefCount>0)return kHeld;
 	return 0;
 }
 
@@ -136,10 +137,10 @@ void irrstCstickRead(circlePosition* pos)
 Result IRRST_GetHandles(Handle* outMemHandle, Handle* outEventHandle)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
-	cmdbuf[0]=0x00010000; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x1,0,0); // 0x10000
 
 	Result ret=0;
-	if((ret=svcSendSyncRequest(irrstHandle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(irrstHandle)))return ret;
 
 	if(outMemHandle)*outMemHandle=cmdbuf[3];
 	if(outEventHandle)*outEventHandle=cmdbuf[4];
@@ -150,12 +151,12 @@ Result IRRST_GetHandles(Handle* outMemHandle, Handle* outEventHandle)
 Result IRRST_Initialize(u32 unk1, u8 unk2)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
-	cmdbuf[0]=0x00020080; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x2,2,0); // 0x20080
 	cmdbuf[1]=unk1;
 	cmdbuf[2]=unk2;
 
 	Result ret=0;
-	if((ret=svcSendSyncRequest(irrstHandle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(irrstHandle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -163,10 +164,10 @@ Result IRRST_Initialize(u32 unk1, u8 unk2)
 Result IRRST_Shutdown(void)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
-	cmdbuf[0]=0x00030000; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x3,0,0); // 0x30000
 
 	Result ret=0;
-	if((ret=svcSendSyncRequest(irrstHandle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(irrstHandle)))return ret;
 
 	return cmdbuf[1];
 }

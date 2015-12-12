@@ -1,30 +1,35 @@
 #include <string.h>
 #include <3ds/types.h>
+#include <3ds/result.h>
 #include <3ds/svc.h>
 #include <3ds/srv.h>
+#include <3ds/synchronization.h>
 #include <3ds/services/httpc.h>
+#include <3ds/ipc.h>
 
-Handle __httpc_servhandle = 0;
+Handle __httpc_servhandle;
+static int __httpc_refcount;
 
-Result httpcInit()
+Result httpcInit(void)
 {
 	Result ret=0;
 
-	if(__httpc_servhandle)return 0;
-	if((ret=srvGetServiceHandle(&__httpc_servhandle, "http:C")))return ret;
+	if (AtomicPostIncrement(&__httpc_refcount)) return 0;
 
-	//*((u32*)0x600) = __httpc_servhandle;
+	ret = srvGetServiceHandle(&__httpc_servhandle, "http:C");
+	if (R_SUCCEEDED(ret))
+	{
+		ret = HTTPC_Initialize(__httpc_servhandle);
+		if (R_FAILED(ret)) svcCloseHandle(__httpc_servhandle);
+	}
+	if (R_FAILED(ret)) AtomicDecrement(&__httpc_refcount);
 
-	ret = HTTPC_Initialize(__httpc_servhandle);
-	if(ret!=0)return ret;
-
-	return 0;
+	return ret;
 }
 
-void httpcExit()
+void httpcExit(void)
 {
-	if(__httpc_servhandle==0)return;
-
+	if (AtomicDecrement(&__httpc_refcount)) return;
 	svcCloseHandle(__httpc_servhandle);
 }
 
@@ -33,16 +38,16 @@ Result httpcOpenContext(httpcContext *context, char* url, u32 use_defaultproxy)
 	Result ret=0;
 
 	ret = HTTPC_CreateContext(__httpc_servhandle, url, &context->httphandle);
-	if(ret!=0)return ret;
+	if(R_FAILED(ret))return ret;
 
 	ret = srvGetServiceHandle(&context->servhandle, "http:C");
-	if(ret!=0) {
+	if(R_FAILED(ret)) {
 		HTTPC_CloseContext(__httpc_servhandle, context->httphandle);
 		return ret;
         }
 
 	ret = HTTPC_InitializeConnectionSession(context->servhandle, context->httphandle);
-	if(ret!=0) {
+	if(R_FAILED(ret)) {
 		svcCloseHandle(context->servhandle);
 		HTTPC_CloseContext(__httpc_servhandle, context->httphandle);
 		return ret;
@@ -51,7 +56,7 @@ Result httpcOpenContext(httpcContext *context, char* url, u32 use_defaultproxy)
 	if(use_defaultproxy==0)return 0;
 
 	ret = HTTPC_SetProxyDefault(context->servhandle, context->httphandle);
-	if(ret!=0) {
+	if(R_FAILED(ret)) {
 		svcCloseHandle(context->servhandle);
 		HTTPC_CloseContext(__httpc_servhandle, context->httphandle);
 		return ret;
@@ -85,7 +90,7 @@ Result httpcReceiveData(httpcContext *context, u8* buffer, u32 size)
 	return HTTPC_ReceiveData(context->servhandle, context->httphandle, buffer, size);
 }
 
-Result httpcGetRequestState(httpcContext *context, httpcReqStatus* out)
+Result httpcGetRequestState(httpcContext *context, HTTPC_RequestStatus* out)
 {
 	return HTTPC_GetRequestState(context->servhandle, context->httphandle, out);
 }
@@ -114,7 +119,7 @@ Result httpcDownloadData(httpcContext *context, u8* buffer, u32 size, u32 *downl
 	if(downloadedsize)*downloadedsize = 0;
 
 	ret=httpcGetDownloadSizeState(context, NULL, &contentsize);
-	if(ret!=0)return ret;
+	if(R_FAILED(ret))return ret;
 
 	while(pos < size)
 	{
@@ -125,9 +130,9 @@ Result httpcDownloadData(httpcContext *context, u8* buffer, u32 size, u32 *downl
 		if(ret==HTTPC_RESULTCODE_DOWNLOADPENDING)
 		{
 			ret=httpcGetDownloadSizeState(context, &pos, NULL);
-			if(ret!=0)return ret;
+			if(R_FAILED(ret))return ret;
 		}
-		else if(ret!=0)
+		else if(R_FAILED(ret))
 		{
 			return ret;
 		}
@@ -146,14 +151,14 @@ Result HTTPC_Initialize(Handle handle)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x10044; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x1,1,4); // 0x10044
 	cmdbuf[1]=0x1000; //unk
-	cmdbuf[2]=0x20;//processID header, following word is set to processID by the arm11kernel.
-	cmdbuf[4]=0;
+	cmdbuf[2]=IPC_Desc_CurProcessHandle();
+	cmdbuf[4]=IPC_Desc_SharedHandles(1);
 	cmdbuf[5]=0;//Some sort of handle.
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -163,14 +168,14 @@ Result HTTPC_CreateContext(Handle handle, char* url, Handle* contextHandle)
 	u32* cmdbuf=getThreadCommandBuffer();
 	u32 l=strlen(url)+1;
 
-	cmdbuf[0]=0x20082; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x2,2,2); // 0x20082
 	cmdbuf[1]=l;
 	cmdbuf[2]=0x01; //unk
-	cmdbuf[3]=(l<<4)|0xA;
+	cmdbuf[3]=IPC_Desc_Buffer(l,IPC_BUFFER_R);
 	cmdbuf[4]=(u32)url;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 	
 	if(contextHandle)*contextHandle=cmdbuf[2];
 
@@ -181,12 +186,12 @@ Result HTTPC_InitializeConnectionSession(Handle handle, Handle contextHandle)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x80042; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x8,1,2); // 0x80042
 	cmdbuf[1]=contextHandle;
-	cmdbuf[2]=0x20; //unk, constant afaict
+	cmdbuf[2]=IPC_Desc_CurProcessHandle();
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -195,11 +200,11 @@ Result HTTPC_SetProxyDefault(Handle handle, Handle contextHandle)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0xe0040; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0xE,1,0); // 0xE0040
 	cmdbuf[1]=contextHandle;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -208,11 +213,11 @@ Result HTTPC_CloseContext(Handle handle, Handle contextHandle)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x30040; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x3,1,0); // 0x30040
 	cmdbuf[1]=contextHandle;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -224,17 +229,17 @@ Result HTTPC_AddRequestHeaderField(Handle handle, Handle contextHandle, char* na
 	int name_len=strlen(name)+1;
 	int value_len=strlen(value)+1;
 
-	cmdbuf[0]=0x1100c4; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x11,3,4); // 0x1100C4
 	cmdbuf[1]=contextHandle;
 	cmdbuf[2]=name_len;
 	cmdbuf[3]=value_len;
-	cmdbuf[4]=(name_len<<14)|0xC02;
+	cmdbuf[4]=IPC_Desc_StaticBuffer(name_len,3);
 	cmdbuf[5]=(u32)name;
-	cmdbuf[6]=(value_len<<4)|0xA;
+	cmdbuf[6]=IPC_Desc_Buffer(value_len,IPC_BUFFER_R);
 	cmdbuf[7]=(u32)value;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -243,11 +248,11 @@ Result HTTPC_BeginRequest(Handle handle, Handle contextHandle)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x90040; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x9,1,0); // 0x90040
 	cmdbuf[1]=contextHandle;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -256,27 +261,27 @@ Result HTTPC_ReceiveData(Handle handle, Handle contextHandle, u8* buffer, u32 si
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0xB0082; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0xB,2,2); // 0xB0082
 	cmdbuf[1]=contextHandle;
 	cmdbuf[2]=size;
-	cmdbuf[3]=(size<<4)|12;
+	cmdbuf[3]=IPC_Desc_Buffer(size,IPC_BUFFER_W);
 	cmdbuf[4]=(u32)buffer;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
 
-Result HTTPC_GetRequestState(Handle handle, Handle contextHandle, httpcReqStatus* out)
+Result HTTPC_GetRequestState(Handle handle, Handle contextHandle, HTTPC_RequestStatus* out)
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x50040; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x5,1,0); // 0x50040
 	cmdbuf[1]=contextHandle;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	*out = cmdbuf[2];
 
@@ -287,11 +292,11 @@ Result HTTPC_GetDownloadSizeState(Handle handle, Handle contextHandle, u32* down
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x60040; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x6,1,0); // 0x60040
 	cmdbuf[1]=contextHandle;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	if(downloadedsize)*downloadedsize = cmdbuf[2];
 	if(contentsize)*contentsize = cmdbuf[3];
@@ -305,17 +310,17 @@ Result HTTPC_GetResponseHeader(Handle handle, Handle contextHandle, char* name, 
 
 	int name_len=strlen(name)+1;
 
-	cmdbuf[0]=0x001e00c4; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x1E,3,4); // 0x1E00C4
 	cmdbuf[1]=contextHandle;
 	cmdbuf[2]=name_len;
 	cmdbuf[3]=valuebuf_maxsize;
-	cmdbuf[4]=(name_len<<14)|0xC02;
+	cmdbuf[4]=IPC_Desc_StaticBuffer(name_len, 3);
 	cmdbuf[5]=(u32)name;
-	cmdbuf[6]=(valuebuf_maxsize<<4)|0xC;
+	cmdbuf[6]=IPC_Desc_Buffer(valuebuf_maxsize, IPC_BUFFER_W);
 	cmdbuf[7]=(u32)value;
 
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	return cmdbuf[1];
 }
@@ -324,11 +329,11 @@ Result HTTPC_GetResponseStatusCode(Handle handle, Handle contextHandle, u32* out
 {
 	u32* cmdbuf=getThreadCommandBuffer();
 
-	cmdbuf[0]=0x220040; //request header code
+	cmdbuf[0]=IPC_MakeHeader(0x22,1,0); // 0x220040
 	cmdbuf[1]=contextHandle;
 	
 	Result ret=0;
-	if((ret=svcSendSyncRequest(handle)))return ret;
+	if(R_FAILED(ret=svcSendSyncRequest(handle)))return ret;
 
 	*out = cmdbuf[2];
 

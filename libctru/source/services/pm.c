@@ -1,20 +1,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <3ds/types.h>
+#include <3ds/result.h>
 #include <3ds/svc.h>
 #include <3ds/srv.h>
+#include <3ds/synchronization.h>
 #include <3ds/services/pm.h>
+#include <3ds/ipc.h>
 
 static Handle pmHandle;
+static int pmRefCount;
 
-Result pmInit()
+Result pmInit(void)
 {
-	return srvGetServiceHandle(&pmHandle, "pm:app");	
+	Result res;
+	if (AtomicPostIncrement(&pmRefCount)) return 0;
+	res = srvGetServiceHandle(&pmHandle, "pm:app");
+	if (R_FAILED(res)) AtomicDecrement(&pmRefCount);
+	return res;
 }
 
-Result pmExit()
+void pmExit(void)
 {
-	return svcCloseHandle(pmHandle);
+	if (AtomicDecrement(&pmRefCount)) return;
+	svcCloseHandle(pmHandle);
 }
 
 Result PM_LaunchTitle(u8 mediatype, u64 titleid, u32 launch_flags)
@@ -22,14 +31,14 @@ Result PM_LaunchTitle(u8 mediatype, u64 titleid, u32 launch_flags)
 	Result ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x00010140;
+	cmdbuf[0] = IPC_MakeHeader(0x1,5,0); // 0x10140
 	cmdbuf[1] = titleid & 0xffffffff;
 	cmdbuf[2] = (titleid >> 32) & 0xffffffff;
 	cmdbuf[3] = mediatype;
 	cmdbuf[4] = 0x0;
 	cmdbuf[5] = launch_flags;
 	
-	if((ret = svcSendSyncRequest(pmHandle))!=0)return ret;
+	if(R_FAILED(ret = svcSendSyncRequest(pmHandle)))return ret;
 	
 	return (Result)cmdbuf[1];
 }
@@ -39,13 +48,13 @@ Result PM_GetTitleExheaderFlags(u8 mediatype, u64 titleid, u8* out)
 	Result ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x00080100;
+	cmdbuf[0] = IPC_MakeHeader(0x8,4,0); // 0x80100
 	cmdbuf[1] = titleid & 0xffffffff;
 	cmdbuf[2] = (titleid >> 32) & 0xffffffff;
 	cmdbuf[3] = mediatype;
 	cmdbuf[4] = 0x0;
 	
-	if((ret = svcSendSyncRequest(pmHandle))!=0)return ret;
+	if(R_FAILED(ret = svcSendSyncRequest(pmHandle)))return ret;
 	
 	memcpy(out, (u8*)(&cmdbuf[2]), 8);
 	
@@ -57,12 +66,12 @@ Result PM_SetFIRMLaunchParams(u32 size, u8* in)
 	Result ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x00090042;
+	cmdbuf[0] = IPC_MakeHeader(0x9,1,2); // 0x90042
 	cmdbuf[1] = size;
-	cmdbuf[2] = (size << 0x4) | 0xa;
+	cmdbuf[2] = IPC_Desc_Buffer(size,IPC_BUFFER_R);
 	cmdbuf[3] = (u32)in;
 	
-	if((ret = svcSendSyncRequest(pmHandle))!=0)return ret;
+	if(R_FAILED(ret = svcSendSyncRequest(pmHandle)))return ret;
 		
 	return (Result)cmdbuf[1];
 }
@@ -72,12 +81,12 @@ Result PM_GetFIRMLaunchParams(u32 size, u8* out)
 	Result ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x00070042;
+	cmdbuf[0] = IPC_MakeHeader(0x7,1,2); // 0x70042
 	cmdbuf[1] = size;
-	cmdbuf[2] = (size << 0x4) | 0xc;
+	cmdbuf[2] = IPC_Desc_Buffer(size,IPC_BUFFER_W);
 	cmdbuf[3] = (u32)out;
 	
-	if((ret = svcSendSyncRequest(pmHandle))!=0)return ret;
+	if(R_FAILED(ret = svcSendSyncRequest(pmHandle)))return ret;
 		
 	return (Result)cmdbuf[1];
 }
@@ -87,13 +96,13 @@ Result PM_LaunchFIRMSetParams(u32 firm_titleid_low, u32 size, u8* in)
 	Result ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x00020082;
+	cmdbuf[0] = IPC_MakeHeader(0x2,2,2); // 0x20082
 	cmdbuf[1] = firm_titleid_low;
 	cmdbuf[2] = size;
-	cmdbuf[3] = (size << 0x4) | 0xa;
+	cmdbuf[3] = IPC_Desc_Buffer(size,IPC_BUFFER_R);
 	cmdbuf[4] = (u32)in;
 	
-	if((ret = svcSendSyncRequest(pmHandle))!=0)return ret;
+	if(R_FAILED(ret = svcSendSyncRequest(pmHandle)))return ret;
 		
 	return (Result)cmdbuf[1];
 }

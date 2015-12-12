@@ -1,20 +1,128 @@
+/**
+ * @file mic.h
+ * @brief MIC (Microphone) service.
+ */
 #pragma once
 
-//See also: http://3dbrew.org/wiki/MIC_Services
+/// Microphone audio encodings.
+typedef enum
+{
+	MICU_ENCODING_PCM8 = 0,         ///< Unsigned 8-bit PCM.
+	MICU_ENCODING_PCM16 = 1,        ///< Unsigned 16-bit PCM.
+	MICU_ENCODING_PCM8_SIGNED = 2,  ///< Signed 8-bit PCM.
+	MICU_ENCODING_PCM16_SIGNED = 3, ///< Signed 16-bit PCM.
+} MICU_Encoding;
 
-Result MIC_Initialize(u32 *sharedmem, u32 sharedmem_size, u8 control, u8 recording, u8 unk0, u8 unk1, u8 unk2);//sharedmem_size = audiodata size + 4, aligned to 0x1000-bytes. The sharedmem ptr must be 0x1000-bytes aligned. The offical 3ds-sound app uses the following values for unk0-unk2: 3, 1, and 1.
-Result MIC_Shutdown();
-u32 MIC_GetSharedMemOffsetValue();
-u32 MIC_ReadAudioData(u8 *outbuf, u32 readsize, u32 waitforevent);//Reads MIC audio data. When waitforevent is non-zero, this clears the event, then waits for MIC-module to signal it again when audio data is written to shared-mem. The return value is the actual byte-size of the read data.
+/// Microphone audio sampling rates.
+typedef enum
+{
+	MICU_SAMPLE_RATE_32730 = 0, ///< 32730 Hz
+	MICU_SAMPLE_RATE_16360 = 1, ///< 16360 Hz
+	MICU_SAMPLE_RATE_10910 = 2, ///< 10910 Hz
+	MICU_SAMPLE_RATE_8180 =  3, ///< 8180 Hz
+} MICU_SampleRate;
 
-Result MIC_MapSharedMem(Handle handle, u32 size);
-Result MIC_UnmapSharedMem();
-Result MIC_cmd3_Initialize(u8 unk0, u8 unk1, u32 sharedmem_baseoffset, u32 sharedmem_endoffset, u8 unk2);
-Result MIC_cmd5();
-Result MIC_GetCNTBit15(u8 *out);
-Result MIC_GetEventHandle(Handle *handle);
-Result MIC_SetControl(u8 value);//See here: http://3dbrew.org/wiki/MIC_Services
-Result MIC_GetControl(u8 *value);
-Result MIC_SetRecording(u8 value);
-Result MIC_IsRecoding(u8 *value);
+/**
+ * @brief Initializes MIC.
+ * @param size Shared memory buffer to write audio data to. Must be aligned to 0x1000 bytes.
+ * @param handle Size of the shared memory buffer.
+ */
+Result micInit(u8* buffer, u32 bufferSize);
 
+/// Exits MIC.
+void micExit(void);
+
+/**
+ * @brief Gets the size of the sample data area within the shared memory buffer.
+ * @return The sample data's size.
+ */
+u32 micGetSampleDataSize(void);
+
+/**
+ * @brief Gets the offset within the shared memory buffer of the last sample written.
+ * @return The last sample's offset.
+ */
+u32 micGetLastSampleOffset(void);
+
+/**
+ * @brief Maps MIC shared memory.
+ * @param size Size of the shared memory.
+ * @param handle Handle of the shared memory.
+ */
+Result MICU_MapSharedMem(u32 size, Handle handle);
+
+/// Unmaps MIC shared memory.
+Result MICU_UnmapSharedMem(void);
+
+/**
+ * @brief Begins sampling microphone input.
+ * @param encoding Encoding of outputted audio.
+ * @param sampleRate Sample rate of outputted audio.
+ * @param sharedMemAudioOffset Offset to write audio data to in the shared memory buffer.
+ * @param sharedMemAudioSize Size of audio data to write to the shared memory buffer. This should be at most "bufferSize - 4".
+ * @param loop Whether to loop back to the beginning of the buffer when the end is reached.
+ */
+Result MICU_StartSampling(MICU_Encoding encoding, MICU_SampleRate sampleRate, u32 offset, u32 size, bool loop);
+
+/**
+ * @brief Adjusts the configuration of the current sampling session.
+ * @param sampleRate Sample rate of outputted audio.
+ */
+Result MICU_AdjustSampling(MICU_SampleRate sampleRate);
+
+/// Stops sampling microphone input.
+Result MICU_StopSampling(void);
+
+/**
+ * @brief Gets whether microphone input is currently being sampled.
+ * @param sampling Pointer to output the sampling state to.
+ */
+Result MICU_IsSampling(bool* sampling);
+
+/**
+ * @brief Gets an event handle triggered when the shared memory buffer is full.
+ * @param handle Pointer to output the event handle to.
+ */
+Result MICU_GetEventHandle(Handle* handle);
+
+/**
+ * @brief Sets the microphone's gain.
+ * @param gain Gain to set.
+ */
+Result MICU_SetGain(u8 gain);
+
+/**
+ * @brief Gets the microphone's gain.
+ * @param gain Pointer to output the current gain to.
+ */
+Result MICU_GetGain(u8* gain);
+
+/**
+ * @brief Sets whether the microphone is powered on.
+ * @param power Whether the microphone is powered on.
+ */
+Result MICU_SetPower(bool power);
+
+/**
+ * @brief Gets whether the microphone is powered on.
+ * @param power Pointer to output the power state to.
+ */
+Result MICU_GetPower(bool* power);
+
+/**
+ * @brief Sets whether to clamp microphone input.
+ * @param clamp Whether to clamp microphone input.
+ */
+Result MICU_SetClamp(bool clamp);
+
+/**
+ * @brief Gets whether to clamp microphone input.
+ * @param clamp Pointer to output the clamp state to.
+ */
+Result MICU_GetClamp(bool* clamp);
+
+/**
+ * @brief Sets whether to allow sampling when the shell is closed.
+ * @param allowShellClosed Whether to allow sampling when the shell is closed.
+ */
+Result MICU_SetAllowShellClosed(bool allowShellClosed);

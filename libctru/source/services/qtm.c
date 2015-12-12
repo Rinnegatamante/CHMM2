@@ -1,64 +1,41 @@
-/*
-  qtm.c - New3DS head-tracking
-*/
 #include <stdlib.h>
 #include <string.h>
 #include <3ds/types.h>
+#include <3ds/result.h>
 #include <3ds/svc.h>
 #include <3ds/srv.h>
+#include <3ds/synchronization.h>
 #include <3ds/services/qtm.h>
+#include <3ds/ipc.h>
 
 Handle qtmHandle;
+static int qtmRefCount;
 
-static bool qtmInitialized = false;
-
-Result qtmInit()
+Result qtmInit(void)
 {
 	Result ret=0;
 
-	if(qtmInitialized)return 0;
+	if (AtomicPostIncrement(&qtmRefCount)) return 0;
 
-	if((ret=srvGetServiceHandle(&qtmHandle, "qtm:u")) && (ret=srvGetServiceHandle(&qtmHandle, "qtm:s")) && (ret=srvGetServiceHandle(&qtmHandle, "qtm:sp")))return ret;
-
-	qtmInitialized = true;
-
-	return 0;
+	ret = srvGetServiceHandle(&qtmHandle, "qtm:u");
+	if (R_FAILED(ret)) ret = srvGetServiceHandle(&qtmHandle, "qtm:s");
+	if (R_FAILED(ret)) ret = srvGetServiceHandle(&qtmHandle, "qtm:sp");
+	if (R_FAILED(ret)) AtomicDecrement(&qtmRefCount);
+	return ret;
 }
 
-void qtmExit()
+void qtmExit(void)
 {
-	if(!qtmInitialized)return;
-
+	if (AtomicDecrement(&qtmRefCount)) return;
 	svcCloseHandle(qtmHandle);
-	qtmInitialized = false;
 }
 
-bool qtmCheckInitialized()
+bool qtmCheckInitialized(void)
 {
-	return qtmInitialized;
+	return qtmRefCount>0;
 }
 
-Result qtmGetHeadtrackingInfo(u64 val, qtmHeadtrackingInfo *out)
-{
-	u32* cmdbuf=getThreadCommandBuffer();
-
-	if(!qtmInitialized)return -1;
-
-	cmdbuf[0]=0x00020080; //request header code
-	memcpy(&cmdbuf[1], &val, 8);
-
-	Result ret=0;
-	if((ret=svcSendSyncRequest(qtmHandle)))return ret;
-
-	ret = (Result)cmdbuf[1];
-	if(ret!=0)return ret;
-
-	if(out)memcpy(out, &cmdbuf[2], sizeof(qtmHeadtrackingInfo));
-
-	return 0;
-}
-
-bool qtmCheckHeadFullyDetected(qtmHeadtrackingInfo *info)
+bool qtmCheckHeadFullyDetected(QTM_HeadTrackingInfo *info)
 {
 	if(info==NULL)return false;
 
@@ -66,7 +43,7 @@ bool qtmCheckHeadFullyDetected(qtmHeadtrackingInfo *info)
 	return false;
 }
 
-Result qtmConvertCoordToScreen(qtmHeadtrackingInfoCoord *coord, float *screen_width, float *screen_height, u32 *x, u32 *y)
+Result qtmConvertCoordToScreen(QTM_HeadTrackingInfoCoord *coord, float *screen_width, float *screen_height, u32 *x, u32 *y)
 {
 	float width = 200.0f;
 	float height = 160.0f;
@@ -83,5 +60,23 @@ Result qtmConvertCoordToScreen(qtmHeadtrackingInfoCoord *coord, float *screen_wi
 	*y = (u32)((coord->y * height) + height);
 
 	return 0;
+}
+
+Result QTM_GetHeadTrackingInfo(u64 val, QTM_HeadTrackingInfo* out)
+{
+	if(!qtmCheckInitialized())return -1;
+
+	Result ret = 0;
+	u32* cmdbuf = getThreadCommandBuffer();
+
+	cmdbuf[0] = IPC_MakeHeader(0x2,2,0); // 0x20080
+	cmdbuf[1] = val&0xFFFFFFFF;
+	cmdbuf[2] = val>>32;
+
+	if(R_FAILED(ret=svcSendSyncRequest(qtmHandle)))return ret;
+
+	if(out) memcpy(out, &cmdbuf[2], sizeof(QTM_HeadTrackingInfo));
+
+	return cmdbuf[1];
 }
 

@@ -9,7 +9,7 @@ endif
 include $(DEVKITARM)/base_rules
 
 export LIBCTRU_MAJOR	:= 0
-export LIBCTRU_MINOR	:= 5
+export LIBCTRU_MINOR	:= 6
 export LIBCTRU_PATCH	:= 0
 
 
@@ -27,6 +27,7 @@ BUILD		:=	build
 SOURCES		:=	source \
 			source/allocator \
 			source/gpu \
+			source/ndsp \
 			source/services \
 			source/services/soc \
 			source/util/rbtree \
@@ -39,10 +40,10 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard
+ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=softfp
 
-CFLAGS	:=	-g -Wall -O2 -mword-relocations \
-			-fno-strict-aliasing \
+CFLAGS	:=	-g -Wall -Werror -O2 -mword-relocations \
+			-ffunction-sections -fno-strict-aliasing \
 			-fomit-frame-pointer -ffast-math \
 			$(ARCH)
 

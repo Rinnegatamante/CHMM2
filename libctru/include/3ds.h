@@ -1,3 +1,7 @@
+/**
+ * @file 3ds.h
+ * @brief Central 3DS header. Includes all others.
+ */
 #pragma once
 
 #ifdef __cplusplus
@@ -6,14 +10,20 @@ extern "C" {
 
 //might be missing some
 #include <3ds/types.h>
+#include <3ds/result.h>
+#include <3ds/ipc.h>
 #include <3ds/svc.h>
 #include <3ds/srv.h>
-#include <3ds/linear.h>
-#include <3ds/vram.h>
 #include <3ds/os.h>
+#include <3ds/synchronization.h>
 #include <3ds/gfx.h>
 #include <3ds/console.h>
+#include <3ds/env.h>
 #include <3ds/util/utf.h>
+
+#include <3ds/allocator/linear.h>
+#include <3ds/allocator/mappable.h>
+#include <3ds/allocator/vram.h>
 
 #include <3ds/services/ac.h>
 #include <3ds/services/am.h>
@@ -22,8 +32,10 @@ extern "C" {
 #include <3ds/services/cfgnor.h>
 #include <3ds/services/cfgu.h>
 #include <3ds/services/csnd.h>
+#include <3ds/services/dsp.h>
 #include <3ds/services/fs.h>
-#include <3ds/services/gsp.h>
+#include <3ds/services/gspgpu.h>
+#include <3ds/services/gsplcd.h>
 #include <3ds/services/hid.h>
 #include <3ds/services/irrst.h>
 #include <3ds/services/httpc.h>
@@ -31,19 +43,25 @@ extern "C" {
 #include <3ds/services/ns.h>
 #include <3ds/services/pm.h>
 #include <3ds/services/ps.h>
-#include <3ds/services/ptm.h>
+#include <3ds/services/ptmu.h>
+#include <3ds/services/ptmsysm.h>
 #include <3ds/services/soc.h>
 #include <3ds/services/mic.h>
 #include <3ds/services/mvd.h>
 #include <3ds/services/news.h>
 #include <3ds/services/qtm.h>
+#include <3ds/services/srvpm.h>
 #include <3ds/services/y2r.h>
 #include <3ds/services/hb.h>
 
 #include <3ds/gpu/gx.h>
 #include <3ds/gpu/gpu.h>
+#include <3ds/gpu/gpu-old.h>
 #include <3ds/gpu/shbin.h>
 #include <3ds/gpu/shaderProgram.h>
+
+#include <3ds/ndsp/ndsp.h>
+#include <3ds/ndsp/channel.h>
 
 #include <3ds/sdmc.h>
 #include <3ds/romfs.h>

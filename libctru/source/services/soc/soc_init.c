@@ -1,6 +1,7 @@
 #include "soc_common.h"
 #include <errno.h>
 #include <sys/socket.h>
+#include <3ds/ipc.h>
 
 static int     soc_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode);
 static int     soc_close(struct _reent *r, int fd);
@@ -37,16 +38,15 @@ soc_devoptab =
   .fchmod_r     = NULL,
 };
 
-
-static Result socu_cmd1(Handle memhandle, u32 memsize)
+static Result SOCU_Initialize(Handle memhandle, u32 memsize)
 {
 	Result ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x00010044;
+	cmdbuf[0] = IPC_MakeHeader(0x1,1,4); // 0x10044
 	cmdbuf[1] = memsize;
-	cmdbuf[2] = 0x20;
-	cmdbuf[4] = 0;
+	cmdbuf[2] = IPC_Desc_CurProcessHandle();
+	cmdbuf[4] = IPC_Desc_SharedHandles(1);
 	cmdbuf[5] = memhandle;
 
 	ret = svcSendSyncRequest(SOCU_handle);
@@ -58,7 +58,23 @@ static Result socu_cmd1(Handle memhandle, u32 memsize)
 	return cmdbuf[1];
 }
 
-Result SOC_Initialize(u32 *context_addr, u32 context_size)
+static Result SOCU_Shutdown(void)
+{
+	Result ret = 0;
+	u32 *cmdbuf = getThreadCommandBuffer();
+
+	cmdbuf[0] = IPC_MakeHeader(0x19,0,0); // 0x190000
+
+	ret = svcSendSyncRequest(SOCU_handle);
+	if(ret != 0) {
+		errno = SYNC_ERROR;
+		return ret;
+	}
+
+	return cmdbuf[1];
+}
+
+Result socInit(u32* context_addr, u32 context_size)
 {
 	Result ret = 0;
 
@@ -78,7 +94,7 @@ Result SOC_Initialize(u32 *context_addr, u32 context_size)
 		return ret;
 	}
 
-	ret = socu_cmd1(socMemhandle, context_size);
+	ret = SOCU_Initialize(socMemhandle, context_size);
 	if(ret != 0)
 	{
 		svcCloseHandle(socMemhandle);
@@ -102,18 +118,15 @@ Result SOC_Initialize(u32 *context_addr, u32 context_size)
 	return 0;
 }
 
-Result SOC_Shutdown(void)
+Result socExit(void)
 {
 	Result ret = 0;
-	u32 *cmdbuf = getThreadCommandBuffer();
 	int dev;
 	
 	svcCloseHandle(socMemhandle);
 	socMemhandle = 0;
 
-	cmdbuf[0] = 0x00190000;
-
-	ret = svcSendSyncRequest(SOCU_handle);
+	ret = SOCU_Shutdown();
 
 	svcCloseHandle(SOCU_handle);
 	SOCU_handle = 0;
@@ -122,8 +135,7 @@ Result SOC_Shutdown(void)
 	if(dev >= 0)
 		RemoveDevice("soc:");
 
-	if(ret)return ret;
-	else return cmdbuf[1];
+	return ret;
 }
 
 static int
@@ -146,9 +158,9 @@ soc_close(struct _reent *r,
 	int ret = 0;
 	u32 *cmdbuf = getThreadCommandBuffer();
 
-	cmdbuf[0] = 0x000B0042;
+	cmdbuf[0] = IPC_MakeHeader(0xB,1,2); // 0xB0042
 	cmdbuf[1] = (u32)sockfd;
-	cmdbuf[2] = 0x20;
+	cmdbuf[2] = IPC_Desc_CurProcessHandle();
 
 	ret = svcSendSyncRequest(SOCU_handle);
 	if(ret != 0) {
