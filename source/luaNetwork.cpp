@@ -119,11 +119,10 @@ static int lua_download(lua_State *L){
 		if(ret==0){
 	#endif
 		httpcBeginRequest(&context);
-		/*httpcReqStatus loading;
-		httpcGetRequestState(&context, &loading);
-		while (loading == 0x5){
+		HTTPC_RequestStatus loading;
+		do{
 			httpcGetRequestState(&context, &loading);
-		}*/
+		}while (loading == HTTPC_STATUS_REQUEST_IN_PROGRESS);
 		u32 statuscode=0;
 		u32 contentsize=0;
 		httpcGetResponseStatusCode(&context, &statuscode, 0);
@@ -246,10 +245,9 @@ static int lua_sendmail(lua_State *L){ //BETA func
 	#endif
 		httpcBeginRequest(&context);
 		HTTPC_RequestStatus loading;
-		httpcGetRequestState(&context, &loading);
-		while (loading == HTTPC_STATUS_REQUEST_IN_PROGRESS){
+		do{
 			httpcGetRequestState(&context, &loading);
-		}
+		}while (loading == HTTPC_STATUS_REQUEST_IN_PROGRESS);
 		u32 statuscode=0;
 		u32 contentsize=0;
 		httpcGetResponseStatusCode(&context, &statuscode, 0);
