@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 		char startstring[256];
 		if (!is3DSX){
 			while (aptGetStatus() != 0x04 or aptGetStatusPower() != 0x01){
-				sprintf(startstring,"CHMM Controls:\n\nA = Install Theme\nY = Theme Preview\nSTART = Exit CHMM\n\nPress POWER to initialize CHMM.");
+				sprintf(startstring,"CHMM Controls:\n\nA = Install Theme\nY = Theme Preview\nSTART = Exit CHMM\n\nPress POWER to initialize CHMM2.");
 				RefreshScreen();
 				ClearScreen(0);
 				ClearScreen(1);
@@ -115,9 +115,8 @@ int main(int argc, char **argv)
 				gspWaitForVBlank();
 			}
 		}
-		
+			
 		errMsg = runScript((char*)index_lua, true);
-		
 		if (errMsg != NULL);{
 		
 			// Fake error to force interpreter shutdown
