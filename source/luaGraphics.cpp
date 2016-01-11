@@ -37,6 +37,15 @@
 #include "icon.cpp"
 #include "icons.cpp"
 #include "voice.cpp"
+#include "pic1.cpp"
+#include "pic2.cpp"
+#include "pic3.cpp"
+#include "pic4.cpp"
+#include "pic1m.cpp"
+#include "pic2m.cpp"
+#include "pic3m.cpp"
+#include "pic4m.cpp"
+#include "zip.cpp"
 
 int cur_screen;
 
@@ -448,6 +457,7 @@ static int lua_assets(lua_State *L) {
 	Bitmap* bitmap1 = decodePNGbuffer(icon_png,size_icon_png);
 	Bitmap* bitmap2 = decodePNGbuffer(icons_png,size_icons_png);
 	Bitmap* bitmap3 = decodePNGbuffer(voice_png,size_voice_png);
+	Bitmap* bitmap4 = decodePNGbuffer(zip,size_zip);
 	sf2d_texture *tex = sf2d_create_texture_mem_RGBA8(bitmap1->pixels, bitmap1->width, bitmap1->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
 	gpu_text* result = (gpu_text*)malloc(sizeof(gpu_text));
 	result->magic = 0x4C545854;
@@ -472,10 +482,105 @@ static int lua_assets(lua_State *L) {
 	result3->height = bitmap3->height;
 	free(bitmap3->pixels);
 	free(bitmap3);
+	sf2d_texture *tex4 = sf2d_create_texture_mem_RGBA8(bitmap4->pixels, bitmap4->width, bitmap4->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result4 = (gpu_text*)malloc(sizeof(gpu_text));
+	result4->magic = 0x4C545854;
+	result4->tex = tex4;
+	result4->width = bitmap4->width;
+	result4->height = bitmap4->height;
+	free(bitmap4->pixels);
+	free(bitmap4);
     lua_pushinteger(L, (u32)(result));
 	lua_pushinteger(L, (u32)(result2));
 	lua_pushinteger(L, (u32)(result3));
-    return 3;
+	lua_pushinteger(L, (u32)(result4));
+    return 4;
+}
+
+static int lua_danzeff(lua_State *L) {
+    int argc = lua_gettop(L);
+    if (argc != 0) return luaL_error(L, "wrong number of arguments");	
+	Bitmap* pics1 = decodePNGbuffer(pic1,size_pic1);
+	Bitmap* pics2 = decodePNGbuffer(pic2,size_pic2);
+	Bitmap* pics3 = decodePNGbuffer(pic3,size_pic3);
+	Bitmap* pics4 = decodePNGbuffer(pic4,size_pic4);
+	Bitmap* pics1m = decodePNGbuffer(pic1m,size_pic1m);
+	Bitmap* pics2m = decodePNGbuffer(pic2m,size_pic2m);
+	Bitmap* pics3m = decodePNGbuffer(pic3m,size_pic3m);
+	Bitmap* pics4m = decodePNGbuffer(pic4m,size_pic4m);
+	sf2d_texture *tex = sf2d_create_texture_mem_RGBA8(pics1->pixels, pics1->width, pics1->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result = (gpu_text*)malloc(sizeof(gpu_text));
+	result->magic = 0x4C545854;
+	result->tex = tex;
+	result->width = pics1->width;
+	result->height = pics1->height;
+	free(pics1->pixels);
+	free(pics1);
+	sf2d_texture *tex2 = sf2d_create_texture_mem_RGBA8(pics2->pixels, pics2->width, pics2->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result2 = (gpu_text*)malloc(sizeof(gpu_text));
+	result2->magic = 0x4C545854;
+	result2->tex = tex2;
+	result2->width = pics2->width;
+	result2->height = pics2->height;
+	free(pics2->pixels);
+	free(pics2);
+	sf2d_texture *tex3 = sf2d_create_texture_mem_RGBA8(pics3->pixels, pics3->width, pics3->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result3 = (gpu_text*)malloc(sizeof(gpu_text));
+	result3->magic = 0x4C545854;
+	result3->tex = tex3;
+	result3->width = pics3->width;
+	result3->height = pics3->height;
+	free(pics3->pixels);
+	free(pics3);
+	sf2d_texture *tex4 = sf2d_create_texture_mem_RGBA8(pics4->pixels, pics4->width, pics4->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result4 = (gpu_text*)malloc(sizeof(gpu_text));
+	result4->magic = 0x4C545854;
+	result4->tex = tex4;
+	result4->width = pics4->width;
+	result4->height = pics4->height;
+	free(pics4->pixels);
+	free(pics4);
+	sf2d_texture *tex1m = sf2d_create_texture_mem_RGBA8(pics1m->pixels, pics1m->width, pics1m->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result1m = (gpu_text*)malloc(sizeof(gpu_text));
+	result1m->magic = 0x4C545854;
+	result1m->tex = tex1m;
+	result1m->width = pics1m->width;
+	result1m->height = pics1m->height;
+	free(pics1m->pixels);
+	free(pics1m);
+	sf2d_texture *tex2m = sf2d_create_texture_mem_RGBA8(pics2m->pixels, pics2m->width, pics2m->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result2m = (gpu_text*)malloc(sizeof(gpu_text));
+	result2m->magic = 0x4C545854;
+	result2m->tex = tex2m;
+	result2m->width = pics2m->width;
+	result2m->height = pics2m->height;
+	free(pics2m->pixels);
+	free(pics2m);
+	sf2d_texture *tex3m = sf2d_create_texture_mem_RGBA8(pics3m->pixels, pics3m->width, pics3m->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result3m = (gpu_text*)malloc(sizeof(gpu_text));
+	result3m->magic = 0x4C545854;
+	result3m->tex = tex3m;
+	result3m->width = pics3m->width;
+	result3m->height = pics3m->height;
+	free(pics3m->pixels);
+	free(pics3m);
+	sf2d_texture *tex4m = sf2d_create_texture_mem_RGBA8(pics4m->pixels, pics4m->width, pics4m->height, TEXFMT_RGBA8, SF2D_PLACE_RAM);
+	gpu_text* result4m = (gpu_text*)malloc(sizeof(gpu_text));
+	result4m->magic = 0x4C545854;
+	result4m->tex = tex4m;
+	result4m->width = pics4m->width;
+	result4m->height = pics4m->height;
+	free(pics4m->pixels);
+	free(pics4m);
+    lua_pushinteger(L, (u32)(result));
+	lua_pushinteger(L, (u32)(result2));
+	lua_pushinteger(L, (u32)(result3));
+	lua_pushinteger(L, (u32)(result4));
+	lua_pushinteger(L, (u32)(result1m));
+	lua_pushinteger(L, (u32)(result2m));
+	lua_pushinteger(L, (u32)(result3m));
+	lua_pushinteger(L, (u32)(result4m));
+    return 8;
 }
 
 static int lua_getHeight(lua_State *L)
@@ -523,6 +628,7 @@ static const luaL_Reg Graphics_functions[] = {
   {"init",					lua_init},
   {"term",					lua_term},
   {"loadAssets",			lua_assets},
+  {"loadDanzeff",			lua_danzeff},
   {"initBlend",				lua_refresh},
   {"loadImage",				lua_loadimg},
   {"drawImage",				lua_drawimg},
