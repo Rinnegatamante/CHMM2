@@ -1554,6 +1554,22 @@ static int lua_getcpu(lua_State *L){
 	return 1;
 }
 
+static int lua_deleteshufflehax(lua_State *L){
+	int argc = lua_gettop(L);
+	#ifndef SKIP_ERROR_HANDLING
+		if(argc != 1 ) return luaL_error(L, "wrong number of arguments.");
+	#endif
+	u32 archive_id = luaL_checkinteger(L, 1);
+	u32 extdata_archive_lowpathdata[3] = {MEDIATYPE_SD, archive_id, 0};
+	FS_Archive extdata_archive = (FS_Archive){ARCHIVE_EXTDATA, (FS_Path){PATH_BINARY, 0xC, (u8*)extdata_archive_lowpathdata}};
+	Result ret = FSUSER_OpenArchive( &extdata_archive);		
+	FSUSER_DeleteFile(extdata_archive, fsMakePath(PATH_ASCII, "/yodyCache.bin"));
+	FSUSER_DeleteFile(extdata_archive, fsMakePath(PATH_ASCII, "/yodyCache_rd.bin"));
+	FSUSER_DeleteFile(extdata_archive, fsMakePath(PATH_ASCII, "/yhemeManage.bin"));
+	FSUSER_CloseArchive(&extdata_archive);
+	return 1;
+}
+
 //Register our System Functions
 static const luaL_Reg System_functions[] = {
 	{"exit",				lua_exit},
@@ -1599,6 +1615,7 @@ static const luaL_Reg System_functions[] = {
 	{"setCpuSpeed",			lua_setcpu},
 	{"getCpuSpeed",			lua_getcpu},
 	{"extractFromZIP",		lua_getfilefromzip},
+	{"deleteShufflehax",	lua_deleteshufflehax},
 // I/O Module and Dofile Patch
 	{"openFile",			lua_openfile},
 	{"getFileSize",			lua_getsize},

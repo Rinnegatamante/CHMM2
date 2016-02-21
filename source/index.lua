@@ -59,6 +59,7 @@ end
 function PurgeTmp()
 	PurgeDir("/tmp")
 end
+black = Color.new(0,0,0)
 white = Color.new(255,255,255)
 -- DANZEFF KEYBOARD PORTING
 danzeff_mode = 1
@@ -249,11 +250,13 @@ function OptionExecute(voice_num)
 			opt_voices[voice_num] = "Listing mode: Ringmenu"
 		end
 	elseif voice_num == 2 then
-		bgm_preview = not bgm_preview
-		if bgm_preview then
-			opt_voices[voice_num] = "BGM Preview: On"
-		else
-			opt_voices[voice_num] = "BGM Preview: Off"
+		if not force_bgm_off then
+			bgm_preview = not bgm_preview
+			if bgm_preview then
+				opt_voices[voice_num] = "BGM Preview: On"
+			else
+				opt_voices[voice_num] = "BGM Preview: Off"
+			end
 		end
 	elseif voice_num == 3 then
 		auto_extract = not auto_extract
@@ -318,19 +321,113 @@ function PrintOptionsVoices()
 		base_y = base_y + 20
 	end
 end
-version = "2.5"
+version = "2.6"
 bgm_opening = false
 theme_downloader = false
 Graphics.init()
 shuffle_themes = {}
 select_shuffle = false
-Sound.init()
 theme_received = false
 netreceiver = false
 install_themes = false
 theme_shuffle = "OFF"
 shuffle_value = 0
 font = Font.loadMain()
+function LastSpace(text)
+	found = false
+	start = -1
+	while string.sub(text,start,start) ~= " " do
+		start = start - 1
+	end
+	return start
+end
+function ErrorGenerator(text)
+	y = 68
+	error_lines = {}
+	while string.len(text) > 50 do
+		endl = 51 + LastSpace(string.sub(text,1,50))
+		table.insert(error_lines,{string.sub(text,1,endl), y})
+		text = string.sub(text,endl+1,-1)
+		y = y + 15
+	end
+	if string.len(text) > 0 then
+		table.insert(error_lines,{text, y})
+	end
+end
+function ShowWarning(text, single_exit)
+	confirm = false
+	ErrorGenerator(text)
+	Screen.flip()
+	Screen.refresh()
+	max_y = error_lines[#error_lines][2] + 40
+	Screen.fillEmptyRect(5,315,50,max_y,black,BOTTOM_SCREEN)
+	Screen.fillRect(6,314,51,max_y-1,white,BOTTOM_SCREEN)
+	Font.print(font,8,53,"Warning",colors[col_idx][1],BOTTOM_SCREEN)
+	for i,line in pairs(error_lines) do
+		Font.print(font,8,line[2],line[1],black,BOTTOM_SCREEN)
+	end
+	if single_exit then
+		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,"OK",black,BOTTOM_SCREEN)
+	else
+		Screen.fillEmptyRect(107,136,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
+		Font.print(font,112,max_y - 23,"Yes",black,BOTTOM_SCREEN)
+		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,"No",black,BOTTOM_SCREEN)
+	end
+	Screen.flip()
+	Screen.refresh()
+	Screen.fillEmptyRect(5,315,50,max_y,black,BOTTOM_SCREEN)
+	Screen.fillRect(6,314,51,max_y-1,white,BOTTOM_SCREEN)
+	Font.print(font,8,53,"Warning",colors[col_idx][1],BOTTOM_SCREEN)
+	for i,line in pairs(error_lines) do
+		Font.print(font,8,line[2],line[1],black,BOTTOM_SCREEN)
+	end
+	if single_exit then
+		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,"OK",black,BOTTOM_SCREEN)
+		while not confirm do
+			if (Controls.check(Controls.read(),KEY_TOUCH)) then
+				x,y = Controls.readTouch()
+				if x >= 147 and x <= 176 and y >= max_y - 23 and y <= max_y - 8 then
+					return true
+				end
+			end
+		end
+	else
+		Screen.fillEmptyRect(107,136,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
+		Font.print(font,112,max_y - 23,"Yes",black,BOTTOM_SCREEN)
+		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,"No",black,BOTTOM_SCREEN)
+		while not confirm do
+			if (Controls.check(Controls.read(),KEY_TOUCH)) then
+				x,y = Controls.readTouch()
+				if x >= 107 and x <= 136 and y >= max_y - 23 and y <= max_y - 8 then
+					return true
+				elseif x >= 147 and x <= 176 and y >= max_y - 23 and y <= max_y - 8 then
+					return false
+				end
+			end
+		end
+	end
+end
+force_bgm_off = false
+if (isShufflehax or isThemehax) and (System.checkBuild() == 1) then
+	if ShowWarning("Are your nands (sysNand and emuNand) unlinked?", false) then
+		ShowWarning("Only for this time, when you'll go to install one or more themes, you'll need an hard-reset to effectively apply changes.", true)
+		if isShufflehax then
+			System.deleteShufflehax(archive)
+		end
+		isShufflehax = false
+		isThemehax = false
+	end
+end
+if not pcall(Sound.init) then
+	ShowWarning("Looks like CHMM2 cannot find a DSP firmware (dspfirm.cdc). Sound system used for previews will be disabled. Read the FAQ in the official CHMM2 thread on GBAtemp.net to know how to get this file.", true)
+	bgm_preview = false
+	force_bgm_off = true
+	opt_voices[2] = "BGM Preview: Off"
+end
 icon, buttons, voice, zip_icon = Graphics.loadAssets()
 function SortDirectory(dir)
 	folders_table = {}
@@ -477,7 +574,7 @@ function PrintInfo()
 		Timer.resume(desc_timer)
 		DescriptionPrint()
 	else
-		Font.print(font, 17, 189, preview_info[2].desc, Color.new(0, 0, 0), BOTTOM_SCREEN)
+		Font.print(font, 17, 189, preview_info[2].desc, black, BOTTOM_SCREEN)
 	end
 	Font.setPixelSizes(font, 12)
 	Font.print(font, 17, 175, "By " .. preview_info[2].author, colors[col_idx][1], BOTTOM_SCREEN)
@@ -610,6 +707,10 @@ function ChangeTheme(theme)
 		io.write(out,0x14,string.char(0x01),1)
 		io.write(out,0x18,string.char(0xFF),1)
 		io.write(out,0x1D,string.char(0x02),1)
+		io.write(out,0x338,u32toString(0),4)
+		io.write(out,0x340,u32toString(0),4)
+		io.write(out,0x360,u32toString(0),4)
+		io.write(out,0x368,u32toString(0),4)
 		io.close(out)
 	end
 end
