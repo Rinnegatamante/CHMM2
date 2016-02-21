@@ -77,13 +77,17 @@ int main(int argc, char **argv)
 	else is3DSX = false;
 	
 	// Check user build and enables kernel access
-	if (nsInit()==0){
+	Handle testHandle;
+	srvGetServiceHandleDirect(&testHandle, "am:u");
+	if (testHandle){
 		CIA_MODE = true;
-		nsExit();
-	}else CIA_MODE = false;
-	isNinjhax2 = false;
-	if (!hbInit()) khaxInit();
-	else isNinjhax2 = true;
+		svcCloseHandle(testHandle);
+	}else{
+		CIA_MODE = false;
+		isNinjhax2 = false;
+		if (!hbInit()) khaxInit();
+		else isNinjhax2 = true;
+	}
 	
 	// Select Audio System (Forcing dsp::DSP)
 	csndAccess = false;
@@ -105,7 +109,7 @@ int main(int argc, char **argv)
 		char startstring[256];
 		if (!is3DSX){
 			while (aptGetStatus() != 0x04 or aptGetStatusPower() != 0x01){
-				sprintf(startstring,"CHMM Controls:\n\nA = Install Theme\nY = Theme Preview\nSTART = Exit CHMM\n\nPress POWER to initialize CHMM2.");
+				sprintf(startstring,"Welcome to CHMM2!\nPress POWER button to start the homebrew.");
 				RefreshScreen();
 				ClearScreen(0);
 				ClearScreen(1);

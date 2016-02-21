@@ -17,10 +17,7 @@ Result amInit(void)
 
 	if (AtomicPostIncrement(&amRefCount)) return 0;
 
-	ret = srvGetServiceHandle(&amHandle, "am:net");
-	if (R_FAILED(ret)) ret = srvGetServiceHandle(&amHandle, "am:u");
-	if (R_FAILED(ret)) ret = srvGetServiceHandle(&amHandle, "am:sys");
-	if (R_FAILED(ret)) ret = srvGetServiceHandle(&amHandle, "am:app");
+	ret = srvGetServiceHandle(&amHandle, "am:u");
 	if (R_FAILED(ret)) AtomicDecrement(&amRefCount);
 
 	return ret;
