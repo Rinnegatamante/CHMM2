@@ -1,3 +1,4 @@
+System.setCpuSpeed(804)
 colors = {
 		{Color.new(0,132,255), Color.new(72,185,255), Color.new(0,132,255)},  -- Cyan
 		{Color.new(255,132,0), Color.new(255,185,72), Color.new(255,132,0)},  -- Orange
@@ -11,11 +12,42 @@ if System.currentDirectory() == "/" then
 else
 	System.currentDirectory(System.currentDirectory().."/Themes/")
 end
+lang_id = System.getLanguage()
+if lang_id == 0 then
+	localization = System.currentDirectory().."../CHMM Localization/japanese.txt"
+elseif lang_id == 1 then
+	localization = System.currentDirectory().."../CHMM Localization/english.txt"
+elseif lang_id == 2 then
+	localization = System.currentDirectory().."../CHMM Localization/french.txt"
+elseif lang_id == 3 then
+	localization = System.currentDirectory().."../CHMM Localization/german.txt"
+elseif lang_id == 4 then
+	localization = System.currentDirectory().."../CHMM Localization/italian.txt"
+elseif lang_id == 5 then
+	localization = System.currentDirectory().."../CHMM Localization/spanish.txt"
+elseif lang_id == 6 then
+	localization = System.currentDirectory().."../CHMM Localization/simplified chinese.txt"
+elseif lang_id == 7 then
+	localization = System.currentDirectory().."../CHMM Localization/korean.txt"
+elseif lang_id == 8 then
+	localization = System.currentDirectory().."../CHMM Localization/dutch.txt"
+elseif lang_id == 9 then
+	localization = System.currentDirectory().."../CHMM Localization/portuguese.txt"
+elseif lang_id == 10 then
+	localization = System.currentDirectory().."../CHMM Localization/russian.txt"
+else
+	localization = System.currentDirectory().."../CHMM Localization/traditional chinese.txt"
+end
+if not System.doesFileExist(localization) then
+	localization = System.currentDirectory().."../CHMM Localization/english.txt"
+end
+dofile(localization)
 if System.doesFileExist(System.currentDirectory().."settings.cfg") then
 	dofile(System.currentDirectory().."settings.cfg")
 else
 	col_idx = 1
 end
+help_mode = false
 function PurgeDir(dir)
 	tmp_files = System.listDirectory(dir)
 	for i, file in pairs(tmp_files) do
@@ -23,9 +55,52 @@ function PurgeDir(dir)
 	end
 	System.deleteDirectory(dir)
 end
+dump_idx = 0
+function hex2num(hex)
+	b1,b2,b3,b4 = string.byte(hex,1,4)
+	return b1 + (b2<<8) + (b3<<16) + (b4<<24)
+end
+function DumpTheme()
+	while System.doesFileExist(System.currentDirectory().."Dumped_"..dump_idx.."/body_LZ.bin") do
+		dump_idx = dump_idx + 1
+	end
+	theme_folder = System.currentDirectory().."Dumped_"..dump_idx
+	System.createDirectory(theme_folder)
+	if isShufflehax or isThemehax then
+		body_f = "/yodyCache.bin"
+		theme_f = "/yhemeManage.bin"
+	else
+		body_f = "/BodyCache.bin"
+		theme_f = "/ThemeManage.bin"
+	end
+	inp = io.open(theme_f, FREAD, archive)
+	if isShufflehax then
+		body_size = hex2num(io.read(inp,0x338,4))
+		bgm_size = hex2num(io.read(inp,0x360,4))
+	else
+		body_size = hex2num(io.read(inp,0x08,4))
+		bgm_size = hex2num(io.read(inp,0x0C,4))
+	end
+	io.close(inp)
+	inp = io.open(body_f, FREAD, archive)
+	body_data = io.read(inp, 0, body_size)
+	io.close(inp)
+	out = io.open(theme_folder.."/body_LZ.bin",FCREATE)
+	io.write(out, 0, body_data, body_size)
+	io.close(out)
+	inp = io.open("/BgmCache.bin", FREAD, archive)
+	bgm_data = io.read(inp, 0, bgm_size)
+	io.close(inp)
+	out = io.open(theme_folder.."/bgm.bcstm",FCREATE)
+	io.write(out,0,bgm_data,bgm_size)
+	io.close(out)
+	table.insert(themes_table, {["name"] = "Dumped_"..dump_idx})
+	table.insert(is_zip, false)
+	table.insert(zip_pass, nil)
+end
 downloading = false
 function GenerateQuery(word)
-	return string.gsub("http://188.166.72.241/3dsthem.es/api?lua&q="..word," ","%20")
+	return string.gsub("http://rinnegatamante.it/CHMM2/getThemes.php?q="..word," ","%20")
 end
 function ExecSearchQuery(query)
 	idx = 1
@@ -33,11 +108,18 @@ function ExecSearchQuery(query)
 	zf = io.open("/tmp.chmm",FWRITE)
 	io.write(zf,0,"z",1)
 	io.close(zf)
-	dofile("/tmp.chmm")
+	zf = io.open("/tmp.chmm",FREAD)
+	len = io.size(zf)
+	io.close(zf)
+	if len >  6 then
+		dofile("/tmp.chmm")
+	else
+		return ExecSearchQuery(query)
+	end
 	System.deleteFile("/tmp.chmm")
 	themes_table = zhemes
 	if #themes_table <= 0 then
-		return ExecSearchQuery("http://188.166.72.241/3dsthem.es/api?lua&popular")
+		return ExecSearchQuery("http://rinnegatamante.it/CHMM2/getThemes.php?popular")
 	end
 	Graphics.freeImage(preview_info[1].icon)
 	Graphics.freeImage(preview_info[2].icon)
@@ -75,7 +157,7 @@ danzeff_map = {
 }
 pic1, pic2, pic3, pic4, pic1m, pic2m, pic3m, pic4m = Graphics.loadDanzeff()
 oldpad = KEY_A
-downloader_voices = {"Download Theme", "Show Preview", "Search"}
+downloader_voices = {downth, showdp, search}
 olddanzpad = KEY_A
 function ShowDanzeff()
 	if danzeff_mode == 1 then
@@ -180,24 +262,25 @@ if wave_style == nil then
 end
 options_menu = false
 opt_voices = {}
-wave_styles = {"Ondular","Tiny Wave","Fullscreen Wave"}
+wave_styles = {wave_style1,wave_style2,wave_style3}
 if list_style then
-	table.insert(opt_voices, "Listing mode: Textlist")
+	table.insert(opt_voices, listopt .. ": " .. listmode1)
 else
-	table.insert(opt_voices, "Listing mode: Ringmenu")
+	table.insert(opt_voices, listopt .. ": " .. listmode2)
 end
 if bgm_preview then
-	table.insert(opt_voices, "BGM Preview: On")
+	table.insert(opt_voices, bgmprev .. ": " .. enabled)
 else
-	table.insert(opt_voices, "BGM Preview: Off")
+	table.insert(opt_voices, bgmprev .. ": " .. disabled)
 end
 if auto_extract then
-	table.insert(opt_voices, "Auto Extract ZIP themes: On")	
+	table.insert(opt_voices, autozipopt .. ": " .. enabled)
 else
-	table.insert(opt_voices, "Auto Extract ZIP themes: Off")	
+	table.insert(opt_voices, autozipopt .. ": " .. disabled)
 end
-table.insert(opt_voices,"Topscreen Wave Style: " .. wave_styles[wave_style])
-table.insert(opt_voices,"Exit CHMM2")
+table.insert(opt_voices, wavopt .. ": " .. wave_styles[wave_style])
+table.insert(opt_voices, dumpopt)
+table.insert(opt_voices, exitopt)
 function ExtractTheme(t_idx, is_temp)
 	filename = System.currentDirectory() .. themes_table[t_idx].name
 	-- TODO: Add password support
@@ -245,25 +328,25 @@ function OptionExecute(voice_num)
 	if voice_num == 1 then
 		list_style = not list_style
 		if list_style then
-			opt_voices[voice_num] = "Listing mode: Textlist"
+			opt_voices[voice_num] = listopt .. ": " .. listmode1
 		else
-			opt_voices[voice_num] = "Listing mode: Ringmenu"
+			opt_voices[voice_num] = listopt .. ": " .. listmode2
 		end
 	elseif voice_num == 2 then
 		if not force_bgm_off then
 			bgm_preview = not bgm_preview
 			if bgm_preview then
-				opt_voices[voice_num] = "BGM Preview: On"
+				opt_voices[voice_num] = bgmprev .. ": " .. enabled
 			else
-				opt_voices[voice_num] = "BGM Preview: Off"
+				opt_voices[voice_num] = bgmprev .. ": " .. disabled
 			end
 		end
 	elseif voice_num == 3 then
 		auto_extract = not auto_extract
 		if auto_extract then
-			opt_voices[voice_num] = "Auto Extract ZIP themes: On"
+			opt_voices[voice_num] = autozipopt .. ": " .. enabled
 		else
-			opt_voices[voice_num] = "Auto Extract ZIP themes: Off"
+			opt_voices[voice_num] = autozipopt .. ": " .. disabled
 		end
 	elseif voice_num == 4 then
 		wave_style = wave_style + 1
@@ -277,8 +360,10 @@ function OptionExecute(voice_num)
 			wav = LoadWave(15,600, 0.1, wave_style, 400)
 		end
 		wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
-		opt_voices[voice_num] = "Topscreen Wave Style: " .. wave_styles[wave_style]
+		opt_voices[voice_num] = wavopt .. ": " .. wave_styles[wave_style]
 	elseif voice_num == 5 then
+		dump_theme = true
+	elseif voice_num == 6 then
 		options_menu = not options_menu
 		Graphics.freeImage(preview_info[1].icon)
 		Graphics.freeImage(preview_info[2].icon)
@@ -321,7 +406,7 @@ function PrintOptionsVoices()
 		base_y = base_y + 20
 	end
 end
-version = "2.6"
+version = "2.7"
 bgm_opening = false
 theme_downloader = false
 Graphics.init()
@@ -362,30 +447,30 @@ function ShowWarning(text, single_exit)
 	max_y = error_lines[#error_lines][2] + 40
 	Screen.fillEmptyRect(5,315,50,max_y,black,BOTTOM_SCREEN)
 	Screen.fillRect(6,314,51,max_y-1,white,BOTTOM_SCREEN)
-	Font.print(font,8,53,"Warning",colors[col_idx][1],BOTTOM_SCREEN)
+	Font.print(font,8,53,warn,colors[col_idx][1],BOTTOM_SCREEN)
 	for i,line in pairs(error_lines) do
 		Font.print(font,8,line[2],line[1],black,BOTTOM_SCREEN)
 	end
 	if single_exit then
 		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
-		Font.print(font,155,max_y - 23,"OK",black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,ok,black,BOTTOM_SCREEN)
 	else
 		Screen.fillEmptyRect(107,136,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
-		Font.print(font,112,max_y - 23,"Yes",black,BOTTOM_SCREEN)
+		Font.print(font,112,max_y - 23,yes,black,BOTTOM_SCREEN)
 		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
-		Font.print(font,155,max_y - 23,"No",black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,no,black,BOTTOM_SCREEN)
 	end
 	Screen.flip()
 	Screen.refresh()
 	Screen.fillEmptyRect(5,315,50,max_y,black,BOTTOM_SCREEN)
 	Screen.fillRect(6,314,51,max_y-1,white,BOTTOM_SCREEN)
-	Font.print(font,8,53,"Warning",colors[col_idx][1],BOTTOM_SCREEN)
+	Font.print(font,8,53,warn,colors[col_idx][1],BOTTOM_SCREEN)
 	for i,line in pairs(error_lines) do
 		Font.print(font,8,line[2],line[1],black,BOTTOM_SCREEN)
 	end
 	if single_exit then
 		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
-		Font.print(font,155,max_y - 23,"OK",black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,ok,black,BOTTOM_SCREEN)
 		while not confirm do
 			if (Controls.check(Controls.read(),KEY_TOUCH)) then
 				x,y = Controls.readTouch()
@@ -396,9 +481,9 @@ function ShowWarning(text, single_exit)
 		end
 	else
 		Screen.fillEmptyRect(107,136,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
-		Font.print(font,112,max_y - 23,"Yes",black,BOTTOM_SCREEN)
+		Font.print(font,112,max_y - 23,yes,black,BOTTOM_SCREEN)
 		Screen.fillEmptyRect(147,176,max_y - 23, max_y - 8,black,BOTTOM_SCREEN)
-		Font.print(font,155,max_y - 23,"No",black,BOTTOM_SCREEN)
+		Font.print(font,155,max_y - 23,no,black,BOTTOM_SCREEN)
 		while not confirm do
 			if (Controls.check(Controls.read(),KEY_TOUCH)) then
 				x,y = Controls.readTouch()
@@ -413,8 +498,8 @@ function ShowWarning(text, single_exit)
 end
 force_bgm_off = false
 if (isShufflehax or isThemehax) and (System.checkBuild() == 1) then
-	if ShowWarning("Are your nands (sysNand and emuNand) unlinked?", false) then
-		ShowWarning("Only for this time, when you'll go to install one or more themes, you'll need an hard-reset to effectively apply changes.", true)
+	if ShowWarning(linkansw, false) then
+		ShowWarning(warnands, true)
 		if isShufflehax then
 			System.deleteShufflehax(archive)
 		end
@@ -423,10 +508,10 @@ if (isShufflehax or isThemehax) and (System.checkBuild() == 1) then
 	end
 end
 if not pcall(Sound.init) then
-	ShowWarning("Looks like CHMM2 cannot find a DSP firmware (dspfirm.cdc). Sound system used for previews will be disabled. Read the FAQ in the official CHMM2 thread on GBAtemp.net to know how to get this file.", true)
+	ShowWarning(nodsp, true)
 	bgm_preview = false
 	force_bgm_off = true
-	opt_voices[2] = "BGM Preview: Off"
+	opt_voices[2] = bgmprev .. ": " .. disabled
 end
 icon, buttons, voice, zip_icon = Graphics.loadAssets()
 function SortDirectory(dir)
@@ -517,7 +602,7 @@ function ReloadValue(p_idx, t_idx)
 end
 function PrintTitle(version_bool)
 	Font.setPixelSizes(font, 16)
-	Font.print(font, 5, 5, "CHMM2 - Theme Manager for Nintendo 3DS", Color.new(255, 255, 255), BOTTOM_SCREEN)
+	Font.print(font, 5, 5, "CHMM2 - " .. hbdesc, Color.new(255, 255, 255), BOTTOM_SCREEN)
 	if version_bool then
 		if Network.isWifiEnabled() then
 			if Network.getIPAddress() == "247.7.224.216" then
@@ -550,6 +635,12 @@ function PrintInfoUI()
 		Graphics.drawImage(275, 158, zip_icon)
 	end
 end
+function PrintListInfoUI()
+	Graphics.drawImage(50, 150, voice)
+	if is_zip[idx] and not theme_downloader then
+		Graphics.drawImage(315, 158, zip_icon)
+	end
+end
 function DescriptionPrint()
 	len = string.len(preview_info[2].desc) - 45
 	if desc_i == 0 or desc_i >= len then
@@ -566,6 +657,22 @@ function DescriptionPrint()
 	end
 	Font.print(font, 17, 189, string.sub(preview_info[2].desc,desc_i,45+desc_i), Color.new(0, 0, 0), BOTTOM_SCREEN)
 end
+function DescriptionListPrint()
+	len = string.len(preview_info[2].desc) - 45
+	if desc_i == 0 or desc_i >= len then
+		if desc_i == 0 and Timer.getTime(desc_timer) > 2000 then
+			desc_i = 1
+			Timer.reset(desc_timer)
+		elseif desc_i >= len and Timer.getTime(desc_timer) > 2000 then
+			desc_i = 0
+			Timer.reset(desc_timer)
+		end
+	else
+		desc_i = desc_i + 1
+		Timer.reset(desc_timer)
+	end
+	Font.print(font, 57, 189, string.sub(preview_info[2].desc,desc_i,45+desc_i), Color.new(0, 0, 0), TOP_SCREEN)
+end
 function PrintInfo()
 	Font.setPixelSizes(font, 20)
 	Font.print(font, 17, 157, preview_info[2].title, colors[col_idx][1], BOTTOM_SCREEN)
@@ -577,7 +684,20 @@ function PrintInfo()
 		Font.print(font, 17, 189, preview_info[2].desc, black, BOTTOM_SCREEN)
 	end
 	Font.setPixelSizes(font, 12)
-	Font.print(font, 17, 175, "By " .. preview_info[2].author, colors[col_idx][1], BOTTOM_SCREEN)
+	Font.print(font, 17, 175, by .. " " .. preview_info[2].author, colors[col_idx][1], BOTTOM_SCREEN)
+end
+function PrintListInfo()
+	Font.setPixelSizes(font, 20)
+	Font.print(font, 57, 157, preview_info[2].title, colors[col_idx][1], TOP_SCREEN)
+	Font.setPixelSizes(font, 16)
+	if string.len(preview_info[2].desc) > 40 then
+		Timer.resume(desc_timer)
+		DescriptionListPrint()
+	else
+		Font.print(font, 57, 189, preview_info[2].desc, black, TOP_SCREEN)
+	end
+	Font.setPixelSizes(font, 12)
+	Font.print(font, 57, 175, by .. " " .. preview_info[2].author, colors[col_idx][1], TOP_SCREEN)
 end
 function PrintDownloadMenu()
 	for i, voice in pairs(downloader_voices) do
@@ -873,11 +993,16 @@ end
 function PrintThemesInfo()
 	Font.setPixelSizes(font, 16)
 	if isShufflehax or isThemehax then
-		Font.print(font, 5, 220, "Detected Themes: " .. #themes_table .. "           MenuHax Mode: ON", Color.new(255, 255, 255), TOP_SCREEN)
+		Font.print(font, 5, 220, detect .. ": " .. #themes_table .. "           " .. haxmode .. ": " .. enabled, Color.new(255, 255, 255), TOP_SCREEN)
 	elseif theme_downloader and not preview then
-		Font.print(font, 5, 220, "Found Themes: " .. #zhemes .. "           Theme Site: 3DSThem.es", Color.new(255, 255, 255), TOP_SCREEN)
+		Font.print(font, 5, 220, foundt .. ": " .. #zhemes .. "           " .. site .. ": 3DSThem.es", Color.new(255, 255, 255), TOP_SCREEN)
 	else
-		Font.print(font, 5, 220, "Detected Themes: " .. #themes_table .. "           Theme Shuffle: " .. theme_shuffle, Color.new(255, 255, 255), TOP_SCREEN)
+		if theme_shuffle == "ON" then
+			tmp = enabled
+		else
+			tmp = disabled
+		end
+		Font.print(font, 5, 220,  detect .. ": " .. #themes_table .. "           " .. shuffle .. ": " .. tmp, Color.new(255, 255, 255), TOP_SCREEN)
 	end
 end
 preview = false
@@ -903,14 +1028,14 @@ function ScanSD()
 end
 function PrintError()
 	Font.setPixelSizes(font, 16)
-	Font.print(font, 17, 157, "No theme recognized.", colors[col_idx][1], BOTTOM_SCREEN)
-	Font.print(font, 17, 173, "You must put themes in:", Color.new(0,0,0), BOTTOM_SCREEN)
+	Font.print(font, 17, 157, norec, colors[col_idx][1], BOTTOM_SCREEN)
+	Font.print(font, 17, 173, folder .. ":", Color.new(0,0,0), BOTTOM_SCREEN)
 	Font.print(font, 17, 188, System.currentDirectory(), Color.new(0,0,0), BOTTOM_SCREEN)
 end
 function PrintControls()
 	Font.setPixelSizes(font, 18)
-	Font.print(font, 57, 60, "Press        to exit CHMM2", Color.new(0,0,0), TOP_SCREEN)
-	Font.print(font, 57, 80, "Press        to scan SD for themes", Color.new(0,0,0), TOP_SCREEN)
+	Font.print(font, 57, 60, press .. "        " .. toexit, Color.new(0,0,0), TOP_SCREEN)
+	Font.print(font, 57, 80, press .. "        " .. toscan, Color.new(0,0,0), TOP_SCREEN)
 end
 function Alert(txt, screen)
 	Font.setPixelSizes(font, 16)
@@ -1061,6 +1186,8 @@ while #themes_table <= 0 do
 					end
 					System.deleteDirectory("/tmp/" .. dir.name)
 					table.insert(themes_table, dir)
+					table.insert(is_zip, false)
+					table.insert(zip_pass, nil)
 				end
 			end
 			System.deleteDirectory("/tmp")
@@ -1117,9 +1244,9 @@ while #themes_table <= 0 do
 	Graphics.termBlend()
 	PrintError()
 	if to_scan then
-		Alert("Scanning SD for themes...", TOP_SCREEN)
+		Alert(scanning, TOP_SCREEN)
 	elseif theme_received then
-		Alert("Receiving a themes packet from network...", TOP_SCREEN)
+		Alert(receiving, TOP_SCREEN)
 	end
 	PrintTitle(true)
 	Screen.flip()
@@ -1141,6 +1268,9 @@ while #themes_table <= 0 do
 			Socket.term()
 		end
 		Sound.term()
+		if not help_screen == nil then
+			Screen.freeImage(help_screen)
+		end
 		System.exit()
 	elseif Controls.check(Controls.read(), KEY_B) then
 		to_scan = true
@@ -1232,12 +1362,12 @@ function ClosePreview()
 end
 function PrintPreviewText()
 	Font.setPixelSizes(font, 18)
-	Font.print(font, 100, 100, "Press        to open theme preview.", white, TOP_SCREEN)
+	Font.print(font, 100, 100, press .. "        " .. toprev, white, TOP_SCREEN)
 end
 function PrintPreviewText2()
 	Font.setPixelSizes(font, 18)
-	Font.print(font, 100, 165, "Press        to erase current theme.", white, TOP_SCREEN)
-	Font.print(font, 100, 190, "Press        to open theme preview.", white, TOP_SCREEN)
+	Font.print(font, 100, 165, press .. "        " .. toerase, white, TOP_SCREEN)
+	Font.print(font, 100, 190, press .. "        " .. toprev, white, TOP_SCREEN)
 end
 function PrintPrevButton()
 	Font.setPixelSizes(font, 18)
@@ -1301,6 +1431,8 @@ while true do
 						end
 						System.deleteDirectory("/tmp/" .. dir.name)
 						table.insert(themes_table, dir)
+						table.insert(is_zip, false)
+						table.insert(zip_pass, nil)
 						System.deleteDirectory("/tmp")
 						System.deleteFile("/tmp.zip")
 					end
@@ -1387,6 +1519,9 @@ while true do
 				PrintPrevButton()
 			end
 		end
+		if list_style and not options_menu then
+			PrintListInfoUI()
+		end
 		if Network.isWifiEnabled() then
 			Graphics.fillRect(390,395,219,235,Color.new(255, 255, 255))
 			Graphics.fillRect(383,388,225,235,Color.new(255, 255, 255))
@@ -1407,28 +1542,32 @@ while true do
 	Graphics.termBlend()
 	if bgm_opening then
 		PrintTitle(false)
-		Alert("Opening BGM preview...", BOTTOM_SCREEN)
+		Alert(openbgm, BOTTOM_SCREEN)
 	elseif install_theme then
 		PrintTitle(false)
-		Alert("Installing theme...", BOTTOM_SCREEN)
+		Alert(installing, BOTTOM_SCREEN)
 	elseif install_themes then
 		PrintTitle(false)
-		Alert("Installing shuffle themeset...", BOTTOM_SCREEN)
+		Alert(installing2, BOTTOM_SCREEN)
 	elseif theme_received then
 		PrintTitle(false)
-		Alert("Receiving a themes packet from network...", BOTTOM_SCREEN)
+		Alert(receiving, BOTTOM_SCREEN)
+	elseif dump_theme then
+		PrintTitle(false)
+		Alert(dumping, BOTTOM_SCREEN)
 	elseif extracting then
 		PrintTitle(false)
-		Alert("Extracting theme...", BOTTOM_SCREEN)
+		Alert(extractingzip, BOTTOM_SCREEN)
 	elseif downloading then
 		PrintTitle(false)
-		Alert("Downloading theme...", BOTTOM_SCREEN)
+		Alert(downloadingth, BOTTOM_SCREEN)
 	else
 		PrintTitle(true)
 	end
 	if not options_menu then
 		if list_style then
 			PrintThemesList()
+			PrintListInfo()
 		else
 			PrintInfo()
 		end
@@ -1439,7 +1578,9 @@ while true do
 		PrintThemesInfo()
 		if not options_menu then
 			if theme_shuffle == "ON" then
-				PrintPreviewText2()
+				if not list_style then
+					PrintPreviewText2()
+				end
 			else
 				PrintPreviewText()
 			end
@@ -1459,7 +1600,10 @@ while true do
 				search_word = search_word .. string.char(input)
 			end
 		end
-		Font.print(font, 10, 180, "Keyword: "..search_word, white, TOP_SCREEN)
+		Font.print(font, 10, 180, keyword.." "..search_word, white, TOP_SCREEN)
+	end
+	if help_mode then
+		Screen.drawImage(5,5, help_screen, BOTTOM_SCREEN)
 	end
 	Screen.flip()
 	Screen.waitVblankStart()
@@ -1476,7 +1620,7 @@ while true do
 		music = true
 		bgm_opening = false
 	elseif downloading then
-		Network.downloadFile("http://188.166.72.241/3dsthem.es/api?download="..themes_table[idx].id,System.currentDirectory()..themes_table[idx].name..".zip")
+		Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?download="..themes_table[idx].id,System.currentDirectory()..themes_table[idx].name..".zip")
 		tmp = themes_table[idx].name
 		themes_table[idx].name = themes_table[idx].name .. ".zip"
 		if auto_extract then
@@ -1492,6 +1636,9 @@ while true do
 			themes_table[idx].name = tmp
 		end
 		downloading = false
+	elseif dump_theme then
+		DumpTheme()
+		dump_theme = false
 	elseif install_theme then
 		if p ~= nil then
 			Timer.pause(alpha_transf)
@@ -1681,7 +1828,7 @@ while true do
 			Timer.reset(desc_timer)
 			ClosePreview()
 			theme_downloader = not theme_downloader
-			ExecSearchQuery("http://188.166.72.241/3dsthem.es/api?lua&popular")
+			ExecSearchQuery("http://rinnegatamante.it/CHMM2/getThemes.php?popular")
 			search_word = ""			
 			list_style = false
 			dwnld_idx = 1
@@ -1710,6 +1857,7 @@ while true do
 			else
 				master_index = 0
 			end
+			ReloadValue(2, idx)
 		end
 		Timer.reset(delayer)
 	elseif Controls.check(pad, KEY_DRIGHT) and Timer.getTime(delayer) > 200 and (not options_menu) then
@@ -1734,6 +1882,7 @@ while true do
 			if (idx >= 9) then
 				master_index = idx - 7
 			end
+			ReloadValue(2, idx)
 		end
 		Timer.reset(delayer)
 	elseif Controls.check(pad, KEY_SELECT) and not Controls.check(oldpad, KEY_SELECT) then
@@ -1741,7 +1890,7 @@ while true do
 			if dwnld_idx == 1 then
 				downloading = true
 			elseif dwnld_idx == 2 then
-				Network.downloadFile("http://188.166.72.241/3dsthem.es/api?preview="..themes_table[idx].id,"/chmm_tmp.png")
+				Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?preview="..themes_table[idx].id,"/chmm_tmp.png")
 				alpha1 = 255
 				alpha2 = 0
 				alpha_transf = Timer.new()
@@ -1774,6 +1923,7 @@ while true do
 			if (idx >= 8) then
 				master_index = idx - 7
 			end
+			ReloadValue(2, idx)
 		elseif theme_downloader then
 			dwnld_idx = dwnld_idx - 1
 			if dwnld_idx < 1 then
@@ -1781,7 +1931,7 @@ while true do
 			end
 		end
 		Timer.reset(delayer)
-	elseif (Controls.check(pad,KEY_DDOWN)) and Timer.getTime(delayer) > 200 then
+	elseif Controls.check(pad,KEY_DDOWN) and Timer.getTime(delayer) > 200 then
 		if options_menu then
 			opt_idx = opt_idx + 1
 			if opt_idx > #opt_voices then
@@ -1801,6 +1951,7 @@ while true do
 			if (idx >= 9) then
 				master_index = idx- 7
 			end
+			ReloadValue(2, idx)
 		elseif theme_downloader then
 			dwnld_idx = dwnld_idx + 1
 			if dwnld_idx > #downloader_voices then
@@ -1808,6 +1959,54 @@ while true do
 			end
 		end
 		Timer.reset(delayer)
+	elseif Controls.check(pad, KEY_TOUCH) and not Controls.check(oldpad, KEY_TOUCH) then
+		help_mode = not help_mode
+		if help_mode then
+			help_screen = Screen.createImage(310, 180, Color.new(255, 255, 255))
+			Screen.fillEmptyRect(0,309,1,180, Color.new(0,0,0), help_screen)
+			if theme_downloader then
+				Screen.debugPrint(3, 5, "A: " .. keysel, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 20, "B: " .. keysel, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 35, "X: " .. keysel, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 50, "Y: " .. keysel, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 65, "L: " .. keymode, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 80, "R: " .. keymode, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 95, "Up/Down: " .. navmen, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 125, "Circle Pad: " .. keymov, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 140, "Select: " .. execv, Color.new(0,0,0), help_screen)
+				Screen.debugPrint(3, 155, "Start: " .. ret1, Color.new(0,0,0), help_screen)
+			elseif not options_menu then
+				if theme_shuffle == "ON" then
+					Screen.debugPrint(3, 5, "A: " .. addth, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 20, "B: " .. eraseth, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 35, "X: " .. installth, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 50, "Y: " .. showprev, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 65, "L: " .. changeidx, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 80, "R: " .. changeidx, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 95, "Up/Down: " .. navthemes, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 125, "Circle Pad: " .. unused, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 140, "Select: " .. changeth, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 155, "Start: " .. openopt, Color.new(0,0,0), help_screen)
+				else
+					Screen.debugPrint(3, 5, "A: " .. installth2, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 20, "B: " .. unused, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 35, "X: " .. opensh, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 50, "Y: " .. showprev, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 65, "L: " .. extzip, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 80, "R: " .. opendown, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 95, "Up/Down: " .. navthemes, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 125, "Circle Pad: " .. unused, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 140, "Select: " .. changeth, Color.new(0,0,0), help_screen)
+					Screen.debugPrint(3, 155, "Start: " .. openopt, Color.new(0,0,0), help_screen)
+				end
+			end
+		else
+			Screen.freeImage(help_screen)
+			help_screen = nil
+		end
 	end
 	oldpad = pad
 end

@@ -6,7 +6,7 @@ BasicInfo:
   Logo                    : Nintendo # Nintendo / Licensed / Distributed / iQue / iQueForSystem
 
 TitleInfo:
-  UniqueId                : 0x1339
+  UniqueId                : 0xCE1CC
   Category                : Application
   
 CardInfo:
@@ -156,7 +156,7 @@ AccessControlInfo:
    - http:C
    - mic:u
    - ndm:u
-   - news:u
+   - mcu::RTC
    - nwm::UDS
    - ptm:u
    - pxi:dev
