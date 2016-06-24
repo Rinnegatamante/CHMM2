@@ -128,11 +128,11 @@ local function LoadWave(height,dim,f,style,x_dim)
 				self.c = 255
 			end
 			local t,x,y,i
-			t = Timer.getTime(self.contador)/1000+desfase
+			t = getTimerState(self.contador)/1000+desfase
 			for x = 0,x_dim,4 do
 				y = 100+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				i = self.Amplitud*(-2*self.pi/self.Long_onda)*math.cos(2*self.pi*(t*self.Frec-x/self.Long_onda))
-				Graphics.drawLine(x-200,x+200,y-i*200,y+i*200,Color.new(self.a,self.b,self.c,math.floor(x/40)))
+				Graphics.drawLine(x-200,x+200,y-i*200,y+i*200,genColor(self.a,self.b,self.c,math.floor(x/40)))
 			end
 			collectgarbage()
 		end
@@ -156,7 +156,7 @@ local function LoadWave(height,dim,f,style,x_dim)
 				self.c = 255
 			end
 			local t,x,y,i,a
-			t = Timer.getTime(self.contador)/1000+desfase
+			t = getTimerState(self.contador)/1000+desfase
 			if self.Amplitud <= 5 then
 				self.aumento = true
 			elseif self.Amplitud >= 110 then
@@ -171,7 +171,7 @@ local function LoadWave(height,dim,f,style,x_dim)
 				y = 120+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				i = self.Amplitud*(-2*self.pi/self.Long_onda)*math.cos(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				for a = -3,3 do
-					Graphics.drawLine(x-20,x+20,a+y-i*20,a+y+i*20,Color.new(self.a,self.b,self.c,25-math.abs(a*5)))
+					Graphics.drawLine(x-20,x+20,a+y-i*20,a+y+i*20,genColor(self.a,self.b,self.c,25-math.abs(a*5)))
 				end
 			end
 			collectgarbage()
@@ -184,17 +184,17 @@ local function LoadWave(height,dim,f,style,x_dim)
 	if style == 3 then
 		f=f or 0.1
 		local onda={pi=math.pi,Frec=f,Long_onda=dim,Amplitud=height}
-		function onda:color(a,b,c) self.Color=Color.new(a,b,c,40) end
+		function onda:color(a,b,c) self.Color=genColor(a,b,c,40) end
 		function onda:init(desfase)
 			desfase=desfase or 0
 			if not self.contador then
 				self.contador=Timer.new()
 			end
 			if not self.Color then
-				self.Color=Color.new(0,0,255,40)
+				self.Color=genColor(0,0,255,40)
 			end
 			local t,x,y,i
-			t = Timer.getTime(self.contador)/1000+desfase
+			t = getTimerState(self.contador)/1000+desfase
 			for x = 0,x_dim do
 				y = 100+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				Graphics.drawLine(x,x,y,240,self.Color)

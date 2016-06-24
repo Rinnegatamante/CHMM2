@@ -42,7 +42,7 @@ wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.ge
 wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
 
 -- Launching patch.lua if exists
-if System.doesFileExist("/patch.lua") then
+if doesFileExist("/patch.lua") then
 	dofile("/patch.lua")
 end
 
@@ -51,10 +51,10 @@ while #themes_table <= 0 do
 	if theme_received then
 		block = Socket.receive(client, 16384)
 		if string.len(block) > 0 then
-			io.write(new_theme, offs, block, string.len(block))
+			writeFile(new_theme, offs, block, string.len(block))
 			offs = offs + string.len(block)
 		else
-			io.close(new_theme)
+			closeFile(new_theme)
 			Socket.send(client, "YATA TERM")
 			Socket.close(client)
 			System.extractZIP("/tmp.zip","/tmp")
@@ -100,7 +100,7 @@ while #themes_table <= 0 do
 				client = Socket.accept(netrecv)
 				if client ~= nil then
 					Socket.send(client, "YATA SENDER")
-					new_theme = io.open("/tmp.zip",FCREATE)
+					new_theme = openFile("/tmp.zip",FCREATE)
 					offs = 0
 					theme_received = true
 				end
@@ -108,7 +108,7 @@ while #themes_table <= 0 do
 		end
 	end
 	pad = Controls.read()
-	Screen.refresh()
+	refreshScreen()
 	Graphics.initBlend(TOP_SCREEN)
 	PrintTopUI()
 	wav:init()
@@ -130,7 +130,7 @@ while #themes_table <= 0 do
 		Alert(receiving, TOP_SCREEN)
 	end
 	PrintTitle(true)
-	Screen.flip()
+	flipScreen()
 	if to_scan then
 		ScanSD()
 	end
@@ -182,20 +182,20 @@ while i <= 3 do
 			System.deleteFile("/tmp.smdh")
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			Screen.debugPrint(5,8,string.sub(themes_table[i2].name,1,3),Color.new(0,0,0),p2_tmp)
+			debugPrint(5,8,string.sub(themes_table[i2].name,1,3),genColor(0,0,0),p2_tmp)
 			tmp = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 			table.insert(preview_info, {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[i2].name, ["icon"] = p2})
 		end
 	else
-		if System.doesFileExist(System.currentDirectory() .. themes_table[i2].name .. "/info.smdh") then
+		if doesFileExist(System.currentDirectory() .. themes_table[i2].name .. "/info.smdh") then
 			table.insert(preview_info, System.extractSMDH(System.currentDirectory() .. themes_table[i2].name .. "/info.smdh"))
 			tmp = Graphics.convertFrom(preview_info[i].icon)
 			Screen.freeImage(preview_info[i].icon)
 			preview_info[i].icon = tmp
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			Screen.debugPrint(5,8,string.sub(themes_table[i2].name,1,3),Color.new(0,0,0),p2_tmp)
+			debugPrint(5,8,string.sub(themes_table[i2].name,1,3),genColor(0,0,0),p2_tmp)
 			p2 = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 			table.insert(preview_info, {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[i2].name, ["icon"] = p2})
@@ -213,10 +213,10 @@ while true do
 	if theme_received then
 		block = Socket.receive(client, 16384)
 		if string.len(block) > 0 then
-			io.write(new_theme, offs, block, string.len(block))
+			writeFile(new_theme, offs, block, string.len(block))
 			offs = offs + string.len(block)
 		else
-			io.close(new_theme)
+			closeFile(new_theme)
 			Socket.send(client, "YATA TERM")
 			Socket.close(client)
 			if auto_extract then
@@ -269,7 +269,7 @@ while true do
 				client = Socket.accept(netrecv)
 				if client ~= nil then
 					Socket.send(client, "YATA SENDER")
-					new_theme = io.open("/tmp.zip",FCREATE)
+					new_theme = openFile("/tmp.zip",FCREATE)
 					offs = 0
 					theme_received = true
 				end
@@ -277,28 +277,28 @@ while true do
 		end
 	end
 	if alpha_transf ~= nil then
-		if Timer.getTime(alpha_transf) > 3000 and alpha_idx <= 255  then
-			if Timer.getTime(alpha_transf) > 3000 + 10 * alpha_idx then
+		if getTimerState(alpha_transf) > 3000 and alpha_idx <= 255  then
+			if getTimerState(alpha_transf) > 3000 + 10 * alpha_idx then
 				alpha_idx = alpha_idx + 5
 				alpha1 = alpha1 - 5
 				alpha2 = alpha2 + 5
 				if alpha_idx == 256 then
-					Timer.reset(alpha_transf)
+					resetTimer(alpha_transf)
 				end
 			end
 		elseif alpha_idx >= 256 and alpha_idx <= 510 then
-			if Timer.getTime(alpha_transf) > 3000 + 10 * (alpha_idx - 255) then
+			if getTimerState(alpha_transf) > 3000 + 10 * (alpha_idx - 255) then
 				alpha_idx = alpha_idx + 5
 				alpha1 = alpha1 + 5
 				alpha2 = alpha2 - 5
 			end
 		elseif alpha_idx > 510 then
-			Timer.reset(alpha_transf)
+			resetTimer(alpha_transf)
 			alpha_idx = 1
 		end
 	end
 	pad = Controls.read()
-	Screen.refresh()
+	refreshScreen()
 	Graphics.initBlend(TOP_SCREEN)
 	PrintTopUI()
 	if preview then
@@ -318,13 +318,13 @@ while true do
 				PrintPrevButton()
 			end
 		end
-		if list_style and not options_menu then
+		if list_style and not options_menu and not preview then
 			PrintListInfoUI()
 		end
 		if Network.isWifiEnabled() then
-			Graphics.fillRect(390,395,219,235,Color.new(255, 255, 255))
-			Graphics.fillRect(383,388,225,235,Color.new(255, 255, 255))
-			Graphics.fillRect(376,381,231,235,Color.new(255, 255, 255))
+			fillGPURect(390,395,219,235,genColor(255, 255, 255))
+			fillGPURect(383,388,225,235,genColor(255, 255, 255))
+			fillGPURect(376,381,231,235,genColor(255, 255, 255))
 		end
 	end
 	Graphics.termBlend()
@@ -366,7 +366,9 @@ while true do
 	if not options_menu then
 		if list_style then
 			PrintThemesList()
-			PrintListInfo()
+			if not preview then
+				PrintListInfo()
+			end
 		else
 			PrintInfo()
 		end
@@ -399,20 +401,20 @@ while true do
 				search_word = search_word .. string.char(input)
 			end
 		end
-		Font.print(font, 10, 180, keyword.." "..search_word, white, TOP_SCREEN)
+		printFont(font, 10, 180, keyword.." "..search_word, white, TOP_SCREEN)
 	end
 	if help_mode then
 		Screen.drawImage(5,5, help_screen, BOTTOM_SCREEN)
 	end
-	Screen.flip()
+	flipScreen()
 	Screen.waitVblankStart()
 	if bgm_opening then
 		Timer.pause(alpha_transf)
 		if is_zip[idx] then
-			bgm_song = Sound.openOgg("/bgm.ogg",false)
+			bgm_song = Sound.openOgg("/bgm.ogg",true)
 			System.deleteFile("/bgm.ogg")
 		else
-			bgm_song = Sound.openOgg(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg",false)
+			bgm_song = Sound.openOgg(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg",true)
 		end
 		Sound.play(bgm_song,LOOP)
 		Timer.resume(alpha_transf)
@@ -490,37 +492,37 @@ while true do
 				end
 				ReloadValue(3, n_idx)
 			end
-			theme_setting = io.open(System.currentDirectory().."settings.cfg",FCREATE)
+			theme_setting = openFile(System.currentDirectory().."settings.cfg",FCREATE)
 			offs = 0
-			io.write(theme_setting,offs,"col_idx = " .. col_idx .. "\n",11 + string.len(col_idx))
+			writeFile(theme_setting,offs,"col_idx = " .. col_idx .. "\n",11 + string.len(col_idx))
 			offs = 11 + string.len(col_idx)
 			if list_style then
-				io.write(theme_setting,offs,"list_style = true\n",18)
+				writeFile(theme_setting,offs,"list_style = true\n",18)
 				offs = offs + 18
 			else
-				io.write(theme_setting,offs,"list_style = false\n",19)
+				writeFile(theme_setting,offs,"list_style = false\n",19)
 				offs = offs + 19
 			end
 			if bgm_preview then
-				io.write(theme_setting,offs,"bgm_preview = true\n",19)
+				writeFile(theme_setting,offs,"bgm_preview = true\n",19)
 				offs = offs + 19
 			else
-				io.write(theme_setting,offs,"bgm_preview = false\n",20)
+				writeFile(theme_setting,offs,"bgm_preview = false\n",20)
 				offs = offs + 20
 			end
 			if auto_extract then
-				io.write(theme_setting,offs,"auto_extract = true\n",20)
+				writeFile(theme_setting,offs,"auto_extract = true\n",20)
 				offs = offs + 20
 			else
-				io.write(theme_setting,offs,"auto_extract = false\n",21)
+				writeFile(theme_setting,offs,"auto_extract = false\n",21)
 				offs = offs + 21
 			end
-			io.write(theme_setting,offs,"wave_style = "..wave_style.."\n",15)
-			io.close(theme_setting)
+			writeFile(theme_setting,offs,"wave_style = "..wave_style.."\n",15)
+			closeFile(theme_setting)
 		end
 	elseif (Controls.check(pad, KEY_START) and not Controls.check(oldpad, KEY_START)) or (theme_downloader and not Network.isWifiEnabled()) then
 		Timer.pause(desc_timer)
-		Timer.reset(desc_timer)
+		resetTimer(desc_timer)
 		ClosePreview()
 		theme_downloader = not theme_downloader
 		themes_table = backuped_table
@@ -575,7 +577,7 @@ while true do
 				if has_bgm then
 					bgm_opening = true
 				end
-			elseif System.doesFileExist(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg") and not music and bgm_preview then
+			elseif doesFileExist(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg") and not music and bgm_preview then
 				bgm_opening = true
 			end
 		else
@@ -624,7 +626,7 @@ while true do
 			backuped_list_style = list_style
 			CloseMusic()
 			Timer.pause(desc_timer)
-			Timer.reset(desc_timer)
+			resetTimer(desc_timer)
 			ClosePreview()
 			theme_downloader = not theme_downloader
 			ExecSearchQuery("http://rinnegatamante.it/CHMM2/getThemes.php?popular")
@@ -632,10 +634,10 @@ while true do
 			list_style = false
 			dwnld_idx = 1
 		end
-	elseif Controls.check(pad, KEY_DLEFT) and Timer.getTime(delayer) > 200 and (not options_menu) then
+	elseif Controls.check(pad, KEY_DLEFT) and getTimerState(delayer) > 200 and (not options_menu) then
 		CloseMusic()
 		Timer.pause(desc_timer)
-		Timer.reset(desc_timer)
+		resetTimer(desc_timer)
 		ClosePreview()
 		if list_style then
 			idx = idx - 8
@@ -658,11 +660,11 @@ while true do
 			end
 			ReloadValue(2, idx)
 		end
-		Timer.reset(delayer)
-	elseif Controls.check(pad, KEY_DRIGHT) and Timer.getTime(delayer) > 200 and (not options_menu) then
+		resetTimer(delayer)
+	elseif Controls.check(pad, KEY_DRIGHT) and getTimerState(delayer) > 200 and (not options_menu) then
 		CloseMusic()
 		Timer.pause(desc_timer)
-		Timer.reset(desc_timer)
+		resetTimer(desc_timer)
 		ClosePreview()
 		if list_style then
 			idx = idx + 8
@@ -683,7 +685,7 @@ while true do
 			end
 			ReloadValue(2, idx)
 		end
-		Timer.reset(delayer)
+		resetTimer(delayer)
 	elseif Controls.check(pad, KEY_SELECT) and not Controls.check(oldpad, KEY_SELECT) then
 		if theme_downloader then
 			if dwnld_idx == 1 then
@@ -706,7 +708,7 @@ while true do
 			wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
 			wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
 		end
-	elseif (Controls.check(pad,KEY_DUP)) and Timer.getTime(delayer) > 200 then
+	elseif (Controls.check(pad,KEY_DUP)) and getTimerState(delayer) > 200 then
 		if options_menu then
 			opt_idx = opt_idx - 1
 			if opt_idx < 1 then
@@ -729,8 +731,8 @@ while true do
 				dwnld_idx = #downloader_voices
 			end
 		end
-		Timer.reset(delayer)
-	elseif Controls.check(pad,KEY_DDOWN) and Timer.getTime(delayer) > 200 then
+		resetTimer(delayer)
+	elseif Controls.check(pad,KEY_DDOWN) and getTimerState(delayer) > 200 then
 		if options_menu then
 			opt_idx = opt_idx + 1
 			if opt_idx > #opt_voices then
@@ -739,7 +741,7 @@ while true do
 		elseif list_style then
 			desc_i = 1
 			Timer.pause(desc_timer)
-			Timer.reset(desc_timer)
+			resetTimer(desc_timer)
 			CloseMusic()
 			ClosePreview()
 			idx = idx + 1
@@ -757,49 +759,49 @@ while true do
 				dwnld_idx = 1
 			end
 		end
-		Timer.reset(delayer)
+		resetTimer(delayer)
 	elseif Controls.check(pad, KEY_TOUCH) and not Controls.check(oldpad, KEY_TOUCH) then
 		help_mode = not help_mode
 		if help_mode then
-			help_screen = Screen.createImage(310, 180, Color.new(255, 255, 255))
-			Screen.fillEmptyRect(0,309,1,180, Color.new(0,0,0), help_screen)
+			help_screen = Screen.createImage(310, 180, genColor(255, 255, 255))
+			fillCPUEmptyRect(0,309,1,180, genColor(0,0,0), help_screen)
 			if theme_downloader then
-				Screen.debugPrint(3, 5, "A: " .. keysel, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 20, "B: " .. keysel, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 35, "X: " .. keysel, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 50, "Y: " .. keysel, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 65, "L: " .. keymode, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 80, "R: " .. keymode, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 95, "Up/Down: " .. navmen, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 125, "Circle Pad: " .. keymov, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 140, "Select: " .. execv, Color.new(0,0,0), help_screen)
-				Screen.debugPrint(3, 155, "Start: " .. ret1, Color.new(0,0,0), help_screen)
+				debugPrint(3, 5, "A: " .. keysel, genColor(0,0,0), help_screen)
+				debugPrint(3, 20, "B: " .. keysel, genColor(0,0,0), help_screen)
+				debugPrint(3, 35, "X: " .. keysel, genColor(0,0,0), help_screen)
+				debugPrint(3, 50, "Y: " .. keysel, genColor(0,0,0), help_screen)
+				debugPrint(3, 65, "L: " .. keymode, genColor(0,0,0), help_screen)
+				debugPrint(3, 80, "R: " .. keymode, genColor(0,0,0), help_screen)
+				debugPrint(3, 95, "Up/Down: " .. navmen, genColor(0,0,0), help_screen)
+				debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
+				debugPrint(3, 125, "Circle Pad: " .. keymov, genColor(0,0,0), help_screen)
+				debugPrint(3, 140, "Select: " .. execv, genColor(0,0,0), help_screen)
+				debugPrint(3, 155, "Start: " .. ret1, genColor(0,0,0), help_screen)
 			elseif not options_menu then
 				if theme_shuffle == "ON" then
-					Screen.debugPrint(3, 5, "A: " .. addth, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 20, "B: " .. eraseth, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 35, "X: " .. installth, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 50, "Y: " .. showprev, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 65, "L: " .. changeidx, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 80, "R: " .. changeidx, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 95, "Up/Down: " .. navthemes, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 125, "Circle Pad: " .. unused, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 140, "Select: " .. changeth, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 155, "Start: " .. openopt, Color.new(0,0,0), help_screen)
+					debugPrint(3, 5, "A: " .. addth, genColor(0,0,0), help_screen)
+					debugPrint(3, 20, "B: " .. eraseth, genColor(0,0,0), help_screen)
+					debugPrint(3, 35, "X: " .. installth, genColor(0,0,0), help_screen)
+					debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
+					debugPrint(3, 65, "L: " .. changeidx, genColor(0,0,0), help_screen)
+					debugPrint(3, 80, "R: " .. changeidx, genColor(0,0,0), help_screen)
+					debugPrint(3, 95, "Up/Down: " .. navthemes, genColor(0,0,0), help_screen)
+					debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
+					debugPrint(3, 125, "Circle Pad: " .. unused, genColor(0,0,0), help_screen)
+					debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
+					debugPrint(3, 155, "Start: " .. openopt, genColor(0,0,0), help_screen)
 				else
-					Screen.debugPrint(3, 5, "A: " .. installth2, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 20, "B: " .. unused, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 35, "X: " .. opensh, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 50, "Y: " .. showprev, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 65, "L: " .. extzip, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 80, "R: " .. opendown, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 95, "Up/Down: " .. navthemes, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 125, "Circle Pad: " .. unused, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 140, "Select: " .. changeth, Color.new(0,0,0), help_screen)
-					Screen.debugPrint(3, 155, "Start: " .. openopt, Color.new(0,0,0), help_screen)
+					debugPrint(3, 5, "A: " .. installth2, genColor(0,0,0), help_screen)
+					debugPrint(3, 20, "B: " .. unused, genColor(0,0,0), help_screen)
+					debugPrint(3, 35, "X: " .. opensh, genColor(0,0,0), help_screen)
+					debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
+					debugPrint(3, 65, "L: " .. extzip, genColor(0,0,0), help_screen)
+					debugPrint(3, 80, "R: " .. opendown, genColor(0,0,0), help_screen)
+					debugPrint(3, 95, "Up/Down: " .. navthemes, genColor(0,0,0), help_screen)
+					debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
+					debugPrint(3, 125, "Circle Pad: " .. unused, genColor(0,0,0), help_screen)
+					debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
+					debugPrint(3, 155, "Start: " .. openopt, genColor(0,0,0), help_screen)
 				end
 			end
 		else
@@ -808,4 +810,7 @@ while true do
 		end
 	end
 	oldpad = pad
+	if music then
+		Sound.updateStream()
+	end
 end

@@ -7,12 +7,12 @@ end
 local function ExecSearchQuery(query)
 	idx = 1
 	Network.downloadFile(query, "/tmp.chmm")
-	zf = io.open("/tmp.chmm",FWRITE)
-	io.write(zf,0,"z",1)
-	io.close(zf)
-	zf = io.open("/tmp.chmm",FREAD)
-	len = io.size(zf)
-	io.close(zf)
+	zf = openFile("/tmp.chmm",FWRITE)
+	writeFile(zf,0,"z",1)
+	closeFile(zf)
+	zf = openFile("/tmp.chmm",FREAD)
+	len = getSize(zf)
+	closeFile(zf)
 	if len >  6 then
 		dofile("/tmp.chmm")
 	else

@@ -1,5 +1,5 @@
 -- Bootstrap (single chunk dofile clone implementation)
-local script = ""--"System.deleteFile(\"/tmp.lua\")" .. string.char(0x0A)
+local script = "System.deleteFile(\"/tmp.lua\")" .. string.char(0x0A)
 local function add2script(file)
 	if System.doesFileExist(file) then
 		local tmp = io.open(file, FREAD)

@@ -1,42 +1,66 @@
 -- Enabling 804 Mhz Mode on N3DS
 System.setCpuSpeed(804)
 
+-- Localizing used functions
+local genColor = Color.new
+local setFontSize = Font.setPixelSizes
+local fillCPURect = Screen.fillRect
+local printFont = Font.print
+local flipScreen = Screen.flip
+local refreshScreen = Screen.refresh
+local fillCPUEmptyRect = Screen.fillEmptyRect
+local fillGPURect = Graphics.fillRect
+local drawImage = Graphics.drawImage
+local drawScaleImage = Graphics.drawScaleImage
+local drawPartialImage = Graphics.drawPartialImage
+local chdir = System.currentDirectory
+local doesFileExist = System.doesFileExist
+local loadImage = Graphics.loadImage
+local debugPrint = Screen.debugPrint
+local getTimerState = Timer.getTime
+local resetTimer = Timer.reset
+local openFile = io.open
+local closeFile = io.close
+local getSize = io.size
+local writeFile = io.write
+local readFile = io.read
+
 -- Setting Themes folder
-if System.currentDirectory() == "/" then
-	System.currentDirectory("/Themes/")
+if chdir() == "/" then
+	chdir("/Themes/")
 else
-	System.currentDirectory(System.currentDirectory().."Themes/")
+	chdir(chdir().."Themes/")
 end
 
 -- Searching for localization files
 local lang_id = System.getLanguage()
 local localization
 if lang_id == 0 then
-	localization = System.currentDirectory().."../CHMM Localization/japanese.txt"
+	localization = chdir().."../CHMM Localization/japanese.txt"
 elseif lang_id == 1 then
-	localization = System.currentDirectory().."../CHMM Localization/english.txt"
+	localization = chdir().."../CHMM Localization/english.txt"
 elseif lang_id == 2 then
-	localization = System.currentDirectory().."../CHMM Localization/french.txt"
+	localization = chdir().."../CHMM Localization/french.txt"
 elseif lang_id == 3 then
-	localization = System.currentDirectory().."../CHMM Localization/german.txt"
+	localization = chdir().."../CHMM Localization/german.txt"
 elseif lang_id == 4 then
-	localization = System.currentDirectory().."../CHMM Localization/italian.txt"
+	localization = chdir().."../CHMM Localization/italian.txt"
 elseif lang_id == 5 then
-	localization = System.currentDirectory().."../CHMM Localization/spanish.txt"
+	localization = chdir().."../CHMM Localization/spanish.txt"
 elseif lang_id == 6 then
-	localization = System.currentDirectory().."../CHMM Localization/simplified chinese.txt"
+	localization = chdir().."../CHMM Localization/simplified chinese.txt"
 elseif lang_id == 7 then
-	localization = System.currentDirectory().."../CHMM Localization/korean.txt"
+	localization = chdir().."../CHMM Localization/korean.txt"
 elseif lang_id == 8 then
-	localization = System.currentDirectory().."../CHMM Localization/dutch.txt"
+	localization = chdir().."../CHMM Localization/dutch.txt"
 elseif lang_id == 9 then
-	localization = System.currentDirectory().."../CHMM Localization/portuguese.txt"
+	localization = chdir().."../CHMM Localization/portuguese.txt"
 elseif lang_id == 10 then
-	localization = System.currentDirectory().."../CHMM Localization/russian.txt"
+	localization = chdir().."../CHMM Localization/russian.txt"
 else
-	localization = System.currentDirectory().."../CHMM Localization/traditional chinese.txt"
+	localization = chdir().."../CHMM Localization/traditional chinese.txt"
 end
-if not System.doesFileExist(localization) then
+if not doesFileExist(localization) then
 	localization = "romfs:/english.txt"
 end
 dofile(localization)
@@ -111,8 +135,8 @@ local extzip = extzip
 local opendown = opendown
 
 -- Searching for config file
-if System.doesFileExist(System.currentDirectory().."settings.cfg") then
-	dofile(System.currentDirectory().."settings.cfg")
+if doesFileExist(chdir().."settings.cfg") then
+	dofile(chdir().."settings.cfg")
 else
 	col_idx = 1
 end
@@ -151,8 +175,8 @@ local preview_info = {}
 local i = 1
 
 -- Initializing some colors
-local black = Color.new(0,0,0)
-local white = Color.new(255,255,255)
+local black = genColor(0,0,0)
+local white = genColor(255,255,255)
 
 -- Initializing description timer
 local desc_timer = Timer.new()
@@ -197,7 +221,7 @@ Graphics.init()
 font = Font.load("romfs:/assets/main.ttf")
 
 -- Loading image assets
-local icon = Graphics.loadImage("romfs:/assets/icon.png")
-local buttons = Graphics.loadImage("romfs:/assets/icons.png")
-local voice = Graphics.loadImage("romfs:/assets/voice.png")
-local zip_icon = Graphics.loadImage("romfs:/assets/zip.png")
+local icon = loadImage("romfs:/assets/icon.png")
+local buttons = loadImage("romfs:/assets/icons.png")
+local voice = loadImage("romfs:/assets/voice.png")
+local zip_icon = loadImage("romfs:/assets/zip.png")
