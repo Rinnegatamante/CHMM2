@@ -46,7 +46,6 @@ local function OptionExecute(voice_num)
 		Graphics.freeImage(icon)
 		Graphics.freeImage(voice)
 		Graphics.freeImage(buttons)
-		DestroyDanzeff()
 		CloseMusic()
 		Timer.destroy(desc_timer)
 		PurgeShuffleTable()
@@ -61,7 +60,9 @@ local function OptionExecute(voice_num)
 		wav:destroy()
 		wav2:destroy()
 		ClosePreview()
-		Timer.destroy(delayer)
+		if not delayer == nil then
+			Timer.destroy(delayer)
+		end
 		System.exit()
 	end
 end

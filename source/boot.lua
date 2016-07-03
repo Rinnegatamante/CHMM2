@@ -1,7 +1,7 @@
 -- Enabling 804 Mhz Mode on N3DS
 System.setCpuSpeed(804)
 
--- Localizing used functions
+-- Localizing used functions/globals
 local genColor = Color.new
 local setFontSize = Font.setPixelSizes
 local fillCPURect = Screen.fillRect
@@ -24,6 +24,12 @@ local closeFile = io.close
 local getSize = io.size
 local writeFile = io.write
 local readFile = io.read
+local drawLine = Graphics.drawLine
+local updateMusic = Sound.updateStream
+local getKeyboardString = Keyboard.getInput
+local showKeyboard = Keyboard.show
+local getKeyboardState = Keyboard.getState
+local FINISHED = FINISHED
 
 -- Setting Themes folder
 if chdir() == "/" then
@@ -155,6 +161,8 @@ local desc_i = 0
 local options_menu = false
 local opt_voices = {}
 local wave_styles = {wave_style1,wave_style2,wave_style3}
+local downloader_voices = {downth, showdp, search}
+local search_word = ""
 local version = "2.7"
 local bgm_opening = false
 local theme_downloader = false
@@ -173,6 +181,7 @@ local is_zip = {}
 local zip_pass = {}
 local preview_info = {}
 local i = 1
+local keyboard = false
 
 -- Initializing some colors
 local black = genColor(0,0,0)

@@ -306,10 +306,6 @@ while true do
 	else
 		wav:init()
 		PrintTopUI2()
-		if theme_downloader and not preview then
-			ShowDanzeff()
-			input = DanzeffInput()
-		end
 		if not options_menu and not theme_downloader then
 			if theme_shuffle == "ON" then
 				PrintPrevButton2()
@@ -390,20 +386,21 @@ while true do
 	if theme_downloader and not preview then
 		PrintThemesInfo()
 		PrintDownloadMenu()
-		if input > 0 then
-			if input == 0x09 then
-				if string.len(search_word) > 1 then
-					search_word = string.sub(search_word,1,string.len(search_word)-1)
-				else
-					search_word = ""
-				end
+		if keyboard then
+			if not (getKeyboardState() == FINISHED) then
+				Keyboard.show()
 			else
-				search_word = search_word .. string.char(input)
+				search_word = Keyboard.getInput()
+				keyboard = false
+				Keyboard.clear()
+				ExecSearchQuery(GenerateQuery(search_word))
 			end
+			printFont(font, 10, 180, keyword.." "..getKeyboardString(), white, TOP_SCREEN)
+		else
+			printFont(font, 10, 180, keyword.." "..search_word, white, TOP_SCREEN)
 		end
-		printFont(font, 10, 180, keyword.." "..search_word, white, TOP_SCREEN)
 	end
-	if help_mode then
+	if help_mode and not keyboard then
 		Screen.drawImage(5,5, help_screen, BOTTOM_SCREEN)
 	end
 	flipScreen()
@@ -519,40 +516,28 @@ while true do
 			end
 			writeFile(theme_setting,offs,"wave_style = "..wave_style.."\n",15)
 			closeFile(theme_setting)
-		end
-	elseif (Controls.check(pad, KEY_START) and not Controls.check(oldpad, KEY_START)) or (theme_downloader and not Network.isWifiEnabled()) then
-		Timer.pause(desc_timer)
-		resetTimer(desc_timer)
-		ClosePreview()
-		theme_downloader = not theme_downloader
-		themes_table = backuped_table
-		is_zip = backuped_zip
-		idx = backuped_idx
-		list_style = backuped_list_style
-		Graphics.freeImage(preview_info[1].icon)
-		Graphics.freeImage(preview_info[2].icon)
-		Graphics.freeImage(preview_info[3].icon)
-		ReloadValue(2, idx)
-		if idx == 1 then
-			o_idx = #themes_table
-		else
-			o_idx = idx - 1
-		end
-		ReloadValue(1, o_idx)
-		if idx == #themes_table then
-			n_idx = 1
-		else
-			n_idx = idx + 1
-		end
-		ReloadValue(3, n_idx)
+		end	
 	elseif (Controls.check(pad,KEY_B)) and not (Controls.check(oldpad,KEY_B)) and theme_shuffle == "ON" and not options_menu and not theme_downloader then
 		if shuffle_value < #shuffle_themes then
 			Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
 			table.remove(shuffle_themes, shuffle_value + 1)
 		end
-	elseif (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) and not theme_downloader then
+	elseif (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) then
 		if options_menu then
 			OptionExecute(opt_idx)
+		elseif theme_downloader then
+			if dwnld_idx == 1 then
+				downloading = true
+			elseif dwnld_idx == 2 then
+				Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?preview="..themes_table[idx].id,"/chmm_tmp.png")
+				alpha1 = 255
+				alpha2 = 0
+				alpha_transf = Timer.new()
+				alpha_idx = 1
+				preview = true
+			else
+				keyboard = true
+			end
 		else
 			if theme_shuffle == "OFF" then
 				install_theme = true
@@ -566,13 +551,15 @@ while true do
 				end
 			end
 		end
-	elseif Controls.check(pad, KEY_Y) and not Controls.check(oldpad, KEY_Y) and not options_menu and not theme_downloader then
+	elseif Controls.check(pad, KEY_Y) and not Controls.check(oldpad, KEY_Y) and not options_menu then
 		if not preview then
 			alpha1 = 255
 			alpha2 = 0
 			alpha_transf = Timer.new()
 			alpha_idx = 1
-			if is_zip[idx] and not music and bgm_preview then
+			if theme_downloader then
+				Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?preview="..themes_table[idx].id,"/chmm_tmp.png")
+			elseif is_zip[idx] and not music and bgm_preview then
 				has_bgm = System.extractFromZIP(System.currentDirectory() .. themes_table[idx].name, "bgm.ogg", "/bgm.ogg")
 				if has_bgm then
 					bgm_opening = true
@@ -580,14 +567,11 @@ while true do
 			elseif doesFileExist(System.currentDirectory()..themes_table[idx].name.."/BGM.ogg") and not music and bgm_preview then
 				bgm_opening = true
 			end
+			preview = true
 		else
 			CloseMusic()
-			Graphics.freeImage(p)
-			p = nil
-			Timer.destroy(alpha_transf)
-			alpha_transf = nil
+			ClosePreview()
 		end
-		preview = not preview
 	elseif (Controls.check(pad,KEY_X)) and not (Controls.check(oldpad,KEY_X)) and not options_menu and not isShufflehax and not isThemehax and not theme_downloader then
 		if theme_shuffle == "ON" then
 			if #shuffle_themes > 1 then
@@ -613,8 +597,33 @@ while true do
 				extracting = true
 			end
 		end
-	elseif (Controls.check(pad,KEY_R)) and not (Controls.check(oldpad,KEY_R)) and not options_menu and not theme_downloader then
-		if theme_shuffle == "ON" then
+	elseif (Controls.check(pad,KEY_R)) and not (Controls.check(oldpad,KEY_R)) and not options_menu or (theme_downloader and not Network.isWifiEnabled()) then
+		if theme_downloader then
+			Timer.pause(desc_timer)
+			resetTimer(desc_timer)
+			ClosePreview()
+			theme_downloader = not theme_downloader
+			themes_table = backuped_table
+			is_zip = backuped_zip
+			idx = backuped_idx
+			list_style = backuped_list_style
+			Graphics.freeImage(preview_info[1].icon)
+			Graphics.freeImage(preview_info[2].icon)
+			Graphics.freeImage(preview_info[3].icon)
+			ReloadValue(2, idx)
+			if idx == 1 then
+				o_idx = #themes_table
+			else
+				o_idx = idx - 1
+			end
+			ReloadValue(1, o_idx)
+			if idx == #themes_table then
+				n_idx = 1
+			else
+				n_idx = idx + 1
+			end
+			ReloadValue(3, n_idx)
+		elseif theme_shuffle == "ON" then
 			shuffle_value = shuffle_value + 1
 			if shuffle_value > #shuffle_themes or shuffle_value > 9 then
 				shuffle_value = 0
@@ -687,27 +696,12 @@ while true do
 		end
 		resetTimer(delayer)
 	elseif Controls.check(pad, KEY_SELECT) and not Controls.check(oldpad, KEY_SELECT) then
-		if theme_downloader then
-			if dwnld_idx == 1 then
-				downloading = true
-			elseif dwnld_idx == 2 then
-				Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?preview="..themes_table[idx].id,"/chmm_tmp.png")
-				alpha1 = 255
-				alpha2 = 0
-				alpha_transf = Timer.new()
-				alpha_idx = 1
-				preview = true
-			else
-				ExecSearchQuery(GenerateQuery(search_word))
-			end
-		else
-			col_idx = col_idx + 1
-			if col_idx > #colors then
-				col_idx = 1
-			end
-			wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
-			wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+		col_idx = col_idx + 1
+		if col_idx > #colors then
+			col_idx = 1
 		end
+		wav:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
+		wav2:color(Color.getR(colors[col_idx][3]),Color.getG(colors[col_idx][3]),Color.getB(colors[col_idx][3]))
 	elseif (Controls.check(pad,KEY_DUP)) and getTimerState(delayer) > 200 then
 		if options_menu then
 			opt_idx = opt_idx - 1
@@ -760,22 +754,22 @@ while true do
 			end
 		end
 		resetTimer(delayer)
-	elseif Controls.check(pad, KEY_TOUCH) and not Controls.check(oldpad, KEY_TOUCH) then
+	elseif Controls.check(pad, KEY_TOUCH) and not Controls.check(oldpad, KEY_TOUCH) and not keyboard then
 		help_mode = not help_mode
 		if help_mode then
 			help_screen = Screen.createImage(310, 180, genColor(255, 255, 255))
 			fillCPUEmptyRect(0,309,1,180, genColor(0,0,0), help_screen)
 			if theme_downloader then
-				debugPrint(3, 5, "A: " .. keysel, genColor(0,0,0), help_screen)
-				debugPrint(3, 20, "B: " .. keysel, genColor(0,0,0), help_screen)
-				debugPrint(3, 35, "X: " .. keysel, genColor(0,0,0), help_screen)
-				debugPrint(3, 50, "Y: " .. keysel, genColor(0,0,0), help_screen)
-				debugPrint(3, 65, "L: " .. keymode, genColor(0,0,0), help_screen)
-				debugPrint(3, 80, "R: " .. keymode, genColor(0,0,0), help_screen)
+				debugPrint(3, 5, "A: " .. execv, genColor(0,0,0), help_screen)
+				debugPrint(3, 20, "B: " .. unused, genColor(0,0,0), help_screen)
+				debugPrint(3, 35, "X: " .. unused, genColor(0,0,0), help_screen)
+				debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
+				debugPrint(3, 65, "L: " .. unused, genColor(0,0,0), help_screen)
+				debugPrint(3, 80, "R: " .. ret1, genColor(0,0,0), help_screen)
 				debugPrint(3, 95, "Up/Down: " .. navmen, genColor(0,0,0), help_screen)
 				debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
-				debugPrint(3, 125, "Circle Pad: " .. keymov, genColor(0,0,0), help_screen)
-				debugPrint(3, 140, "Select: " .. execv, genColor(0,0,0), help_screen)
+				debugPrint(3, 125, "Circle Pad: " .. unused, genColor(0,0,0), help_screen)
+				debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
 				debugPrint(3, 155, "Start: " .. ret1, genColor(0,0,0), help_screen)
 			elseif not options_menu then
 				if theme_shuffle == "ON" then
@@ -811,6 +805,6 @@ while true do
 	end
 	oldpad = pad
 	if music then
-		Sound.updateStream()
+		updateMusic()
 	end
 end
