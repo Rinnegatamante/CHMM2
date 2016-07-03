@@ -235,7 +235,7 @@ local function PrintDownloadMenu()
 		else
 			color = white
 		end
-		printFont(font, 200, 35 + i * 15, voice, color, TOP_SCREEN)
+		printFont(font, 5, 35 + i * 15, voice, color, TOP_SCREEN)
 	end
 end
 
@@ -250,6 +250,9 @@ local function PrintPreviews()
 	elseif img_type == "SSHOT" then
 		drawPartialImage(0, 0, 16, 16, 400, 240, p, genColor(255,255,255,alpha1))
 		drawPartialImage(40, 0, 56, 272, 320, 240, p, genColor(255,255,255,alpha2))
+	elseif img_type == "USAGI" then
+		drawPartialImage(0, 0, 6, 0, 400, 240, p, genColor(255,255,255,alpha1))
+		drawPartialImage(40, 0, 46, 240, 320, 240, p, genColor(255,255,255,alpha2))
 	else
 		drawPartialImage(0, 0, 0, 0, 400, 240, p)
 	end

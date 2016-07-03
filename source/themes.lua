@@ -377,6 +377,8 @@ function LoadPreview()
 		img_type = "YATA"
 	elseif r_width == 432 and r_height == 528 then
 		img_type = "SSHOT"
+	elseif r_width == 412 and r_height >= 480 then
+		img_type = "USAGI"
 	else
 		img_type = "UNKNWN"
 	end
