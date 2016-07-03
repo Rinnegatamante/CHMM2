@@ -1,6 +1,6 @@
 -- GenerateQuery: Generates an API query
 local function GenerateQuery(word)
-	return string.gsub("http://rinnegatamante.it/CHMM2/getThemes.php?q="..word," ","%20")
+	return string.gsub("http://rinnegatamante.it/CHMM2/getThemes.php?q="..word," ","%%20")
 end
 
 -- ExecSearchQuery: Start a search with the online API
