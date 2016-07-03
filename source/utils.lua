@@ -132,7 +132,7 @@ local function LoadWave(height,dim,f,style,x_dim)
 			for x = 0,x_dim,4 do
 				y = 100+self.Amplitud*math.sin(2*self.pi*(t*self.Frec-x/self.Long_onda))
 				i = self.Amplitud*(-2*self.pi/self.Long_onda)*math.cos(2*self.pi*(t*self.Frec-x/self.Long_onda))
-				Graphics.drawLine(x-200,x+200,y-i*200,y+i*200,genColor(self.a,self.b,self.c,math.floor(x/40)))
+				drawLine(x-200,x+200,y-i*200,y+i*200,genColor(self.a,self.b,self.c,math.floor(x/40)))
 			end
 			collectgarbage()
 		end
