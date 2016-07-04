@@ -1,3 +1,7 @@
-With this homebrew, through a simple menu you can choose what theme you want to install and interchange them rapidly and safely.
+# Description
 
-You can also add a preview in .PNG format with your own theme that will be showed on TOP_SCREEN (if the PNG is too big for the screen, it can be "explored" through Circle Pad).
+**CHMM2** is an open source Theme Manager for Nintendo 3DS based on [lpp-3ds](https://github.com/Rinnegatamante/lpp-3ds).
+
+# Help
+
+You can help the development of this tool by making pull to [solve/add these bugs/features](https://docs.google.com/document/d/1WL-y-Vh5X2gxUdWb0xsfIr4CnH1wAdbrzqLvHnzeaGA/edit).
