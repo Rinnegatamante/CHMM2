@@ -182,7 +182,7 @@ while i <= 3 do
 			System.deleteFile("/tmp.smdh")
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			debugPrint(5,8,string.sub(themes_table[i2].name,1,3),genColor(0,0,0),p2_tmp)
+			Screen.debugPrint(5,8,string.sub(themes_table[i2].name,1,3),genColor(0,0,0),p2_tmp)
 			tmp = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 			table.insert(preview_info, {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[i2].name, ["icon"] = p2})
@@ -195,7 +195,7 @@ while i <= 3 do
 			preview_info[i].icon = tmp
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			debugPrint(5,8,string.sub(themes_table[i2].name,1,3),genColor(0,0,0),p2_tmp)
+			Screen.debugPrint(5,8,string.sub(themes_table[i2].name,1,3),genColor(0,0,0),p2_tmp)
 			p2 = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 			table.insert(preview_info, {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[i2].name, ["icon"] = p2})
@@ -205,8 +205,9 @@ while i <= 3 do
 	i = i + 1
 end
 
--- Initializing system timer
+-- Initializing system timers
 local delayer = Timer.new()
+local helder = Timer.new()
 
 -- Main loop
 while true do
@@ -517,37 +518,53 @@ while true do
 			writeFile(theme_setting,offs,"wave_style = "..wave_style.."\n",15)
 			closeFile(theme_setting)
 		end	
-	elseif (Controls.check(pad,KEY_B)) and not (Controls.check(oldpad,KEY_B)) and theme_shuffle == "ON" and not options_menu and not theme_downloader then
-		if shuffle_value < #shuffle_themes then
-			Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
-			table.remove(shuffle_themes, shuffle_value + 1)
-		end
-	elseif (Controls.check(pad,KEY_A)) and not (Controls.check(oldpad,KEY_A)) then
-		if options_menu then
-			OptionExecute(opt_idx)
-		elseif theme_downloader then
-			if dwnld_idx == 1 then
-				downloading = true
-			elseif dwnld_idx == 2 then
-				Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?preview="..themes_table[idx].id,"/chmm_tmp.png")
-				alpha1 = 255
-				alpha2 = 0
-				alpha_transf = Timer.new()
-				alpha_idx = 1
-				preview = true
-			else
-				keyboard = true
+	elseif (Controls.check(pad,KEY_B)) and not (Controls.check(oldpad,KEY_B)) and not options_menu and not theme_downloader then
+		if theme_shuffle == "ON" then
+			if shuffle_value < #shuffle_themes then
+				Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
+				table.remove(shuffle_themes, shuffle_value + 1)
 			end
 		else
-			if theme_shuffle == "OFF" then
-				install_theme = true
-			else
-				-- TODO: Add password support for ZIP themes
-				if shuffle_value == #shuffle_themes then
-					table.insert(shuffle_themes, {themes_table[idx].name, LoadIcon(idx), is_zip[idx], idx})
+			install_theme = true
+			install_bgm = false
+		end
+	elseif (Controls.check(pad,KEY_A)) then
+		if not (Controls.check(oldpad,KEY_A)) then
+			if options_menu then
+				OptionExecute(opt_idx)
+			elseif theme_downloader then
+				if dwnld_idx == 1 then
+					downloading = true
+				elseif dwnld_idx == 2 then
+					Network.downloadFile("http://rinnegatamante.it/CHMM2/api.php?preview="..themes_table[idx].id,"/chmm_tmp.png")
+					alpha1 = 255
+					alpha2 = 0
+					alpha_transf = Timer.new()
+					alpha_idx = 1
+					preview = true
 				else
-					Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
-					shuffle_themes[shuffle_value + 1] = {themes_table[idx].name, LoadIcon(idx), is_zip[idx], idx}
+					keyboard = true
+				end
+			else
+				if theme_shuffle == "OFF" then
+					install_theme = true
+					install_bgm = true
+				else
+					-- TODO: Add password support for ZIP themes
+					resetTimer(helder)
+					if shuffle_value == #shuffle_themes then
+						table.insert(shuffle_themes, {themes_table[idx].name, LoadIcon(idx), is_zip[idx], idx, true})
+					else
+						Graphics.freeImage(shuffle_themes[shuffle_value + 1][2])
+						shuffle_themes[shuffle_value + 1] = {themes_table[idx].name, LoadIcon(idx), is_zip[idx], idx, true}
+					end
+				end
+			end
+		elseif theme_shuffle == "ON" then
+			if getTimerState(helder) > 1000 then
+				if shuffle_themes[shuffle_value + 1][5] then
+					shuffle_themes[shuffle_value + 1][5] = false
+					Screen.drawImage(0,0,muted_icon,shuffle_themes[shuffle_value + 1][2])
 				end
 			end
 		end
@@ -760,42 +777,42 @@ while true do
 			help_screen = Screen.createImage(310, 180, genColor(255, 255, 255))
 			fillCPUEmptyRect(0,309,1,180, genColor(0,0,0), help_screen)
 			if theme_downloader then
-				debugPrint(3, 5, "A: " .. execv, genColor(0,0,0), help_screen)
-				debugPrint(3, 20, "B: " .. unused, genColor(0,0,0), help_screen)
-				debugPrint(3, 35, "X: " .. unused, genColor(0,0,0), help_screen)
-				debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
-				debugPrint(3, 65, "L: " .. unused, genColor(0,0,0), help_screen)
-				debugPrint(3, 80, "R: " .. ret1, genColor(0,0,0), help_screen)
-				debugPrint(3, 95, "Up/Down: " .. navmen, genColor(0,0,0), help_screen)
-				debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
-				debugPrint(3, 125, "Circle Pad: " .. unused, genColor(0,0,0), help_screen)
-				debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
-				debugPrint(3, 155, "Start: " .. ret1, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 5, "A: " .. execv, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 20, "B: " .. unused, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 35, "X: " .. unused, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 65, "L: " .. unused, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 80, "R: " .. ret1, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 95, "Up/Down: " .. navmen, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 125, "A (Hold): " .. unused, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
+				Screen.debugPrint(3, 155, "Start: " .. ret1, genColor(0,0,0), help_screen)
 			elseif not options_menu then
 				if theme_shuffle == "ON" then
-					debugPrint(3, 5, "A: " .. addth, genColor(0,0,0), help_screen)
-					debugPrint(3, 20, "B: " .. eraseth, genColor(0,0,0), help_screen)
-					debugPrint(3, 35, "X: " .. installth, genColor(0,0,0), help_screen)
-					debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
-					debugPrint(3, 65, "L: " .. changeidx, genColor(0,0,0), help_screen)
-					debugPrint(3, 80, "R: " .. changeidx, genColor(0,0,0), help_screen)
-					debugPrint(3, 95, "Up/Down: " .. navthemes, genColor(0,0,0), help_screen)
-					debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
-					debugPrint(3, 125, "Circle Pad: " .. unused, genColor(0,0,0), help_screen)
-					debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
-					debugPrint(3, 155, "Start: " .. openopt, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 5, "A: " .. addth, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 20, "B: " .. eraseth, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 35, "X: " .. installth, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 65, "L: " .. changeidx, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 80, "R: " .. changeidx, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 95, "Up/Down: " .. navthemes, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 125, "A (Hold): " .. addth2, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 155, "Start: " .. openopt, genColor(0,0,0), help_screen)
 				else
-					debugPrint(3, 5, "A: " .. installth2, genColor(0,0,0), help_screen)
-					debugPrint(3, 20, "B: " .. unused, genColor(0,0,0), help_screen)
-					debugPrint(3, 35, "X: " .. opensh, genColor(0,0,0), help_screen)
-					debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
-					debugPrint(3, 65, "L: " .. extzip, genColor(0,0,0), help_screen)
-					debugPrint(3, 80, "R: " .. opendown, genColor(0,0,0), help_screen)
-					debugPrint(3, 95, "Up/Down: " .. navthemes, genColor(0,0,0), help_screen)
-					debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
-					debugPrint(3, 125, "Circle Pad: " .. unused, genColor(0,0,0), help_screen)
-					debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
-					debugPrint(3, 155, "Start: " .. openopt, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 5, "A: " .. installth2, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 20, "B: " .. installth3, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 35, "X: " .. opensh, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 50, "Y: " .. showprev, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 65, "L: " .. extzip, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 80, "R: " .. opendown, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 95, "Up/Down: " .. navthemes, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 110, "Left/Right: " .. navthemes, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 125, "A (Hold): " .. unused, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 140, "Select: " .. changeth, genColor(0,0,0), help_screen)
+					Screen.debugPrint(3, 155, "Start: " .. openopt, genColor(0,0,0), help_screen)
 				end
 			end
 		else

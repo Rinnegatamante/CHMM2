@@ -91,7 +91,7 @@ end
 local function ReloadValue(p_idx, t_idx)
 	if theme_downloader then
 		p2_tmp = Screen.createImage(48,48, white)
-		debugPrint(5,8,string.sub(themes_table[t_idx].name,1,3),genColor(0,0,0),p2_tmp)
+		Screen.debugPrint(5,8,string.sub(themes_table[t_idx].name,1,3),genColor(0,0,0),p2_tmp)
 		tmp = Graphics.convertFrom(p2_tmp)
 		Screen.freeImage(p2_tmp)
 		preview_info[p_idx] = {["author"] = themes_table[t_idx].by, ["desc"] = themes_table[t_idx].desc, ["title"] = themes_table[t_idx].name, ["icon"] = tmp}
@@ -105,7 +105,7 @@ local function ReloadValue(p_idx, t_idx)
 			System.deleteFile("/tmp.smdh")
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			debugPrint(5,8,string.sub(themes_table[t_idx].name,1,3),genColor(0,0,0),p2_tmp)
+			Screen.debugPrint(5,8,string.sub(themes_table[t_idx].name,1,3),genColor(0,0,0),p2_tmp)
 			tmp = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 			preview_info[p_idx] = {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[t_idx].name, ["icon"] = tmp}
@@ -118,7 +118,7 @@ local function ReloadValue(p_idx, t_idx)
 			preview_info[p_idx].icon = tmp
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			debugPrint(5,8,string.sub(themes_table[t_idx].name,1,3),genColor(0,0,0),p2_tmp)
+			Screen.debugPrint(5,8,string.sub(themes_table[t_idx].name,1,3),genColor(0,0,0),p2_tmp)
 			p2 = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 			preview_info[p_idx] = {["author"] = "Unknown", ["desc"] = "No description.", ["title"] = themes_table[t_idx].name, ["icon"] = p2}
@@ -156,7 +156,7 @@ local function ChangeTheme(theme)
 	else
 		body_size = 0
 	end
-	if doesFileExist(theme.."/bgm.bcstm") then
+	if doesFileExist(theme.."/bgm.bcstm") and install_bgm then
 		bgm = openFile(theme.."/bgm.bcstm",FREAD)
 		bgm_size = getSize(bgm)
 		to_write = readFile(bgm,0,bgm_size)
@@ -174,6 +174,15 @@ local function ChangeTheme(theme)
 		closeFile(bgm)
 	else
 		bgm_size = 0
+		out = openFile("/BgmCache.bin",FWRITE,archive)
+		local z = 1
+		local blank = string.char(0)
+		while z < 0x337000 do
+			blank = blank .. blank
+			z = string.len(blank)
+		end
+		writeFile(out,0,blank,0x337000)
+		io.close(out)
 	end
 	if doesFileExist(theme.."/ThemeManage.bin") and not isShufflehax then
 		tm = openFile(theme.."/ThemeManage.bin",FREAD)
@@ -259,14 +268,14 @@ local function ChangeMultipleTheme(themes)
 	while i < 10 do
 		if i < #themes then
 			theme = themes[i + 1][1]
-			if doesFileExist(System.currentDirectory()..theme.."/bgm.bcstm") then
+			if doesFileExist(System.currentDirectory()..theme.."/bgm.bcstm") and themes[i + 1][5] then
 				bgm = openFile(System.currentDirectory()..theme.."/bgm.bcstm",FREAD)
 				bgm_size = getSize(bgm)
 				out = openFile("/BgmCache_0"..i..".bin",FWRITE,archive)
 				writeFile(out,0,readFile(bgm,0,bgm_size),bgm_size)
 				closeFile(out)
 				closeFile(bgm)
-			elseif doesFileExist("/tmp"..i.."/bgm.bcstm") and themes[i + 1][3] then
+			elseif doesFileExist("/tmp"..i.."/bgm.bcstm") and themes[i + 1][3] and themes[i + 1][5] then
 				bgm = openFile("/tmp"..i.."/bgm.bcstm",FREAD)
 				bgm_size = getSize(bgm)
 				out = openFile("/BgmCache_0"..i..".bin",FWRITE,archive)
@@ -275,6 +284,15 @@ local function ChangeMultipleTheme(themes)
 				closeFile(bgm)
 			else
 				bgm_size = 0
+				out = openFile("/BgmCache_0"..i..".bin",FWRITE,archive)
+				local z = 1
+				local blank = string.char(0)
+				while z < 0x337000 do
+					blank = blank .. blank
+					z = string.len(blank)
+				end
+				writeFile(out,0,blank,0x337000)
+				io.close(out)
 			end
 		else
 			bgm_size = 0
@@ -396,7 +414,7 @@ function LoadIcon(my_idx)
 			System.deleteFile("/tmp.smdh")
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			debugPrint(5,8,string.sub(themes_table[my_idx].name,1,3),genColor(0,0,0),p2_tmp)
+			Screen.debugPrint(5,8,string.sub(themes_table[my_idx].name,1,3),genColor(0,0,0),p2_tmp)
 			tmp = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 		end
@@ -407,7 +425,7 @@ function LoadIcon(my_idx)
 			Screen.freeImage(tmp_v.icon)
 		else
 			p2_tmp = Screen.createImage(48,48, white)
-			debugPrint(5,8,string.sub(themes_table[my_idx].name,1,3),genColor(0,0,0),p2_tmp)
+			Screen.debugPrint(5,8,string.sub(themes_table[my_idx].name,1,3),genColor(0,0,0),p2_tmp)
 			tmp = Graphics.convertFrom(p2_tmp)
 			Screen.freeImage(p2_tmp)
 		end
