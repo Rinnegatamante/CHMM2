@@ -8,7 +8,7 @@ local function add2script(file)
 	end
 end
 local scripts = {
-	"boot.lua", "themes.lua", "utils.lua", "render.lua",
+	"boot.lua", "utils.lua", "themes.lua", "render.lua",
 	"options.lua", "downloader.lua", "main.lua"
 }
 for i, code in pairs(scripts) do

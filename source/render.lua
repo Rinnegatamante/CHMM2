@@ -336,9 +336,9 @@ end
 
 -- PrintShuffleGrid: Prints Shuffle Mode Grid
 local function PrintShuffleGrid()
-	x = 12
-	y = 10
-	i = 1
+	local x = 12
+	local y = 10
+	local i = 1
 	while i <= 10 do
 		if i == (shuffle_value + 1) then
 			drawImage(x, y, icon)
